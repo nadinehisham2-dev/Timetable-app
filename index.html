@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Timetable">
+<title>Timetable</title>
+<style>
+  :root {
+    --bg: #ffffff; --text: #111; --muted: #8e8e93; --line: #e3e3e6;
+    --weekend: #f4f4f5; --accent: #e0533d; --sheet: #ffffff; --soft: #f2f2f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#000; --text:#f2f2f2; --muted:#8e8e93; --line:#2c2c2e;
+            --weekend:#111113; --sheet:#1c1c1e; --soft:#2c2c2e; }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; }
+  body { display:flex; flex-direction:column; padding-top: env(safe-area-inset-top); }
+
+  header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px 6px; gap:8px; }
+  .title { font-size: clamp(24px, 5vw, 42px); letter-spacing:-0.5px; white-space:nowrap; }
+  .title b { font-weight:800; }
+  .title span { font-weight:400; }
+  .actions { display:flex; align-items:center; gap:4px; }
+  .btn-link { background:none; border:none; color:var(--accent); font-size:17px; padding:8px 10px; cursor:pointer; }
+  .icon-btn { background:none; border:none; color:var(--accent); font-size:22px; padding:6px 10px; cursor:pointer; }
+
+  .weekdays { display:grid; grid-template-columns:repeat(7,1fr); border-bottom:1px solid var(--line); }
+  .weekdays div { text-align:right; padding:6px 8px; font-size:clamp(12px,2.4vw,20px); font-weight:500; }
+  .weekdays div.we { color:var(--muted); }
+
+  .grid { flex:1; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; min-height:0; }
+  .cell { border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:4px 4px 2px;
+    overflow:hidden; cursor:pointer; display:flex; flex-direction:column; min-height:70px; }
+  .cell:nth-child(7n) { border-right:none; }
+  .cell.we { background:var(--weekend); }
+  .cell.empty { cursor:default; }
+  .num { align-self:flex-end; font-size:clamp(13px,2.6vw,24px); font-weight:500; width:1.7em; height:1.7em;
+    display:flex; align-items:center; justify-content:center; border-radius:50%; margin-bottom:2px; }
+  .cell.we .num { color:var(--muted); }
+  .cell.today .num { background:var(--accent); color:#fff; }
+  .items { text-align:center; font-size:clamp(8px,1.35vw,13px); line-height:1.3; overflow:hidden; }
+  .items .pl { font-weight:700; }
+  .items .tk { color:var(--text); }
+
+  /* Sheet */
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; z-index:10; }
+  .overlay.open { display:block; }
+  .sheet { position:fixed; left:0; right:0; bottom:0; max-height:88vh; background:var(--sheet);
+    border-radius:16px 16px 0 0; transform:translateY(100%); transition:transform .25s ease; z-index:11;
+    display:flex; flex-direction:column; padding-bottom: env(safe-area-inset-bottom); }
+  @media (min-width: 700px) {
+    .sheet { left:50%; right:auto; width:560px; bottom:auto; top:50%; border-radius:16px;
+      transform:translate(-50%,-40%); opacity:0; pointer-events:none; transition: all .2s ease; }
+    .sheet.open { transform:translate(-50%,-50%); opacity:1; pointer-events:auto; }
+  }
+  .sheet.open { transform:translateY(0); }
+  .sheet-head { display:flex; align-items:center; justify-content:space-between; padding:14px 16px;
+    border-bottom:1px solid var(--line); }
+  .sheet-head h2 { margin:0; font-size:19px; }
+  .sheet-body { overflow:auto; padding:12px 16px 20px; }
+
+  .entry { background:var(--soft); border-radius:12px; padding:12px; margin-bottom:10px;
+    border-left:6px solid #999; cursor:pointer; }
+  .entry .top { display:flex; justify-content:space-between; gap:8px; font-weight:700; }
+  .entry ul { margin:6px 0 0; padding-left:18px; }
+  .entry .note { margin-top:6px; color:var(--muted); font-size:14px; white-space:pre-wrap; }
+  .empty-msg { color:var(--muted); text-align:center; padding:20px 0; }
+
+  .primary { width:100%; background:var(--accent); color:#fff; border:none; border-radius:12px;
+    font-size:17px; font-weight:600; padding:13px; cursor:pointer; }
+  .secondary { width:100%; background:var(--soft); color:var(--text); border:none; border-radius:12px;
+    font-size:16px; padding:12px; cursor:pointer; margin-top:8px; }
+  .danger { width:100%; background:none; color:#ff3b30; border:none; font-size:16px; padding:12px; cursor:pointer; margin-top:4px; }
+
+  label { display:block; font-size:13px; color:var(--muted); margin:12px 0 5px; text-transform:uppercase; letter-spacing:.3px; }
+  input, select, textarea { width:100%; font:inherit; font-size:16px; padding:10px 12px; border-radius:10px;
+    border:1px solid var(--line); background:var(--bg); color:var(--text); }
+  textarea { min-height:70px; resize:vertical; }
+  .row { display:flex; gap:10px; } .row > * { flex:1; }
+  .task-row { display:flex; gap:6px; margin-bottom:6px; }
+  .task-row button { background:none; border:none; color:#ff3b30; font-size:20px; cursor:pointer; }
+  .add-small { background:none; border:none; color:var(--accent); font-size:15px; padding:4px 0; cursor:pointer; }
+
+  .place-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
+  .place-row input[type=color] { width:42px; height:36px; padding:2px; flex:none; }
+  .place-row input[type=text] { flex:1; }
+  .place-row button { background:none; border:none; color:#ff3b30; font-size:20px; cursor:pointer; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title"><b id="mName"></b> <span id="yName"></span></div>
+  <div class="actions">
+    <button class="icon-btn" id="prev" aria-label="Previous month">‹</button>
+    <button class="btn-link" id="today">Today</button>
+    <button class="icon-btn" id="next" aria-label="Next month">›</button>
+    <button class="icon-btn" id="placesBtn" aria-label="Places and colors" title="Places & colors">🎨</button>
+  </div>
+</header>
+
+<div class="weekdays" id="weekdays"></div>
+<div class="grid" id="grid"></div>
+
+<div class="overlay" id="overlay"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-head">
+    <button class="btn-link" id="sheetBack" style="visibility:hidden">‹ Back</button>
+    <h2 id="sheetTitle"></h2>
+    <button class="btn-link" id="sheetClose">Done</button>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
+</div>
+
+<script>
+// ---------- Storage ----------
+const KEY = 'timetable-v1';
+const DEFAULT = {
+  places: [
+    { id: 'p1', name: 'PUA',    color: '#6a9a3a' },
+    { id: 'p2', name: 'Mounir', color: '#2350c8' },
+    { id: 'p3', name: 'Yoga',   color: '#b13ee0' },
+  ],
+  entries: []
+};
+function load() {
+  try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.places) return d; } catch (e) {}
+  return structuredClone(DEFAULT);
+}
+let db = load();
+function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { alert('Could not save'); } }
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+// ---------- Helpers ----------
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS = ['Sat','Sun','Mon','Tue','Wed','Thu','Fri'];   // week starts Saturday
+const WEEKEND = new Set([0, 6]);                             // Sat & Fri columns
+const pad = n => String(n).padStart(2, '0');
+const iso = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const place = id => db.places.find(p => p.id === id) || { name: 'Other', color: '#888' };
+
+function fmtTime(t) {
+  if (!t) return '';
+  let [h, m] = t.split(':').map(Number);
+  const ap = h >= 12 ? 'pm' : 'am'; h = h % 12 || 12;
+  return m ? `${h}:${pad(m)}${ap}` : `${h}${ap}`;
+}
+function fmtRange(s, e) {
+  if (!s) return '';
+  if (!e) return fmtTime(s);
+  const a = fmtTime(s), b = fmtTime(e);
+  // "2-7pm" when both share am/pm, like the original
+  if (a.slice(-2) === b.slice(-2)) return a.slice(0, -2) + '-' + b;
+  return a + '-' + b;
+}
+const entriesFor = date => db.entries.filter(e => e.date === date)
+  .sort((a, b) => (a.start || '99').localeCompare(b.start || '99'));
+
+// ---------- Calendar ----------
+let view = new Date(); view.setDate(1);
+
+document.getElementById('weekdays').innerHTML =
+  DAYS.map((d, i) => `<div class="${WEEKEND.has(i) ? 'we' : ''}">${d}</div>`).join('');
+
+function render() {
+  const y = view.getFullYear(), m = view.getMonth();
+  document.getElementById('mName').textContent = MONTHS[m];
+  document.getElementById('yName').textContent = y;
+
+  const first = new Date(y, m, 1).getDay();       // 0=Sun..6=Sat
+  const offset = (first + 1) % 7;                  // Sat-first
+  const days = new Date(y, m + 1, 0).getDate();
+  const total = Math.ceil((offset + days) / 7) * 7;
+  const t = new Date(), todayIso = iso(t.getFullYear(), t.getMonth(), t.getDate());
+
+  let html = '';
+  for (let i = 0; i < total; i++) {
+    const col = i % 7, d = i - offset + 1, we = WEEKEND.has(col) ? ' we' : '';
+    if (d < 1 || d > days) { html += `<div class="cell empty${we}"></div>`; continue; }
+    const date = iso(y, m, d);
+    const items = entriesFor(date).map(e => {
+      const p = place(e.placeId);
+      const time = fmtRange(e.start, e.end);
+      let s = `<div class="pl" style="color:${p.color}">${esc(p.name)}${time ? ' ' + time : ''}</div>`;
+      (e.tasks || []).filter(Boolean).forEach(tk => s += `<div class="tk">-${esc(tk)}-</div>`);
+      return s;
+    }).join('');
+    html += `<div class="cell${we}${date === todayIso ? ' today' : ''}" data-date="${date}">
+      <div class="num">${d}</div><div class="items">${items}</div></div>`;
+  }
+  const grid = document.getElementById('grid');
+  grid.innerHTML = html;
+  grid.style.gridTemplateRows = `repeat(${total / 7}, minmax(70px, 1fr))`;
+}
+
+document.getElementById('grid').addEventListener('click', e => {
+  const c = e.target.closest('.cell[data-date]'); if (c) openDay(c.dataset.date);
+});
+document.getElementById('prev').onclick = () => { view.setMonth(view.getMonth() - 1); render(); };
+document.getElementById('next').onclick = () => { view.setMonth(view.getMonth() + 1); render(); };
+document.getElementById('today').onclick = () => { view = new Date(); view.setDate(1); render(); };
+
+// swipe between months
+let sx = null;
+document.getElementById('grid').addEventListener('touchstart', e => sx = e.touches[0].clientX, { passive: true });
+document.getElementById('grid').addEventListener('touchend', e => {
+  if (sx === null) return; const dx = e.changedTouches[0].clientX - sx; sx = null;
+  if (Math.abs(dx) > 60) { view.setMonth(view.getMonth() + (dx < 0 ? 1 : -1)); render(); }
+});
+
+// ---------- Sheet ----------
+const sheet = document.getElementById('sheet'), overlay = document.getElementById('overlay');
+const body = document.getElementById('sheetBody'), titleEl = document.getElementById('sheetTitle');
+const backBtn = document.getElementById('sheetBack');
+let backAction = null;
+
+function showSheet(title, html, back) {
+  titleEl.textContent = title; body.innerHTML = html; body.scrollTop = 0;
+  backAction = back || null; backBtn.style.visibility = back ? 'visible' : 'hidden';
+  sheet.classList.add('open'); overlay.classList.add('open');
+}
+function closeSheet() { sheet.classList.remove('open'); overlay.classList.remove('open'); render(); }
+overlay.onclick = closeSheet;
+document.getElementById('sheetClose').onclick = closeSheet;
+backBtn.onclick = () => backAction && backAction();
+
+function dayTitle(date) {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+// Day detail
+function openDay(date) {
+  const list = entriesFor(date);
+  let html = list.length ? '' : '<div class="empty-msg">Nothing planned yet.</div>';
+  list.forEach(e => {
+    const p = place(e.placeId);
+    html += `<div class="entry" data-id="${e.id}" style="border-left-color:${p.color}">
+      <div class="top"><span style="color:${p.color}">${esc(p.name)}</span><span>${fmtRange(e.start, e.end)}</span></div>
+      ${(e.tasks || []).filter(Boolean).length ? '<ul>' + e.tasks.filter(Boolean).map(t => `<li>${esc(t)}</li>`).join('') + '</ul>' : ''}
+      ${e.note ? `<div class="note">${esc(e.note)}</div>` : ''}
+    </div>`;
+  });
+  html += `<button class="primary" id="addEntry">+ Add</button>`;
+  showSheet(dayTitle(date), html);
+  body.querySelectorAll('.entry').forEach(el => el.onclick = () => openEditor(date, el.dataset.id));
+  document.getElementById('addEntry').onclick = () => openEditor(date);
+}
+
+// Add / edit entry
+function openEditor(date, id) {
+  const e = id ? db.entries.find(x => x.id === id)
+               : { id: null, date, placeId: db.places[0]?.id || '', start: '', end: '', tasks: [''], note: '' };
+  const opts = db.places.map(p => `<option value="${p.id}" ${p.id === e.placeId ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+  const html = `
+    <label>Place</label>
+    <select id="fPlace">${opts}<option value="__new">+ New place…</option></select>
+    <div class="row">
+      <div><label>Start</label><input type="time" id="fStart" value="${e.start || ''}"></div>
+      <div><label>End</label><input type="time" id="fEnd" value="${e.end || ''}"></div>
+    </div>
+    <label>Tasks</label>
+    <div id="fTasks"></div>
+    <button class="add-small" id="fAddTask">+ Add task</button>
+    <label>Notes</label>
+    <textarea id="fNote" placeholder="Optional">${esc(e.note)}</textarea>
+    <div style="height:14px"></div>
+    <button class="primary" id="fSave">Save</button>
+    ${id ? '<button class="danger" id="fDelete">Delete</button>' : ''}`;
+  showSheet(id ? 'Edit' : 'New', html, () => openDay(date));
+
+  const tasksEl = document.getElementById('fTasks');
+  const addTask = (v = '') => {
+    const r = document.createElement('div'); r.className = 'task-row';
+    r.innerHTML = `<input type="text" placeholder="e.g. pt diagnosis" value="${esc(v)}"><button aria-label="Remove">−</button>`;
+    r.querySelector('button').onclick = () => r.remove();
+    tasksEl.appendChild(r); return r;
+  };
+  (e.tasks && e.tasks.length ? e.tasks : ['']).forEach(t => addTask(t));
+  document.getElementById('fAddTask').onclick = () => addTask().querySelector('input').focus();
+
+  const sel = document.getElementById('fPlace');
+  sel.onchange = () => {
+    if (sel.value !== '__new') return;
+    const name = prompt('Place name'); if (!name || !name.trim()) { sel.value = db.places[0]?.id || ''; return; }
+    const colors = ['#e0533d','#f29d38','#2a9d8f','#e76fa3','#5a6acf','#8a5a2b','#3aa0d8'];
+    const p = { id: uid(), name: name.trim(), color: colors[db.places.length % colors.length] };
+    db.places.push(p); save();
+    sel.insertAdjacentHTML('afterbegin', `<option value="${p.id}">${esc(p.name)}</option>`); sel.value = p.id;
+  };
+
+  document.getElementById('fSave').onclick = () => {
+    if (!sel.value || sel.value === '__new') { alert('Choose a place'); return; }
+    const data = {
+      date, placeId: sel.value,
+      start: document.getElementById('fStart').value, end: document.getElementById('fEnd').value,
+      tasks: [...tasksEl.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean),
+      note: document.getElementById('fNote').value.trim()
+    };
+    if (id) Object.assign(e, data); else db.entries.push({ id: uid(), ...data });
+    save(); render(); openDay(date);
+  };
+  if (id) document.getElementById('fDelete').onclick = () => {
+    if (!confirm('Delete this?')) return;
+    db.entries = db.entries.filter(x => x.id !== id); save(); render(); openDay(date);
+  };
+}
+
+// Places & colours
+function openPlaces() {
+  const rows = db.places.map(p => `
+    <div class="place-row" data-id="${p.id}">
+      <input type="color" value="${p.color}"><input type="text" value="${esc(p.name)}">
+      <button aria-label="Delete">−</button>
+    </div>`).join('');
+  showSheet('Places & colors', `
+    <div id="pl">${rows}</div>
+    <button class="add-small" id="plAdd" style="margin-top:10px">+ Add place</button>
+    <div style="height:14px"></div>
+    <button class="primary" id="plSave">Save</button>
+    <button class="secondary" id="exp">Back up data (download)</button>
+    <button class="secondary" id="imp">Restore from backup</button>
+    <input type="file" id="impFile" accept="application/json" style="display:none">`);
+
+  const pl = document.getElementById('pl');
+  const wire = r => r.querySelector('button').onclick = () => {
+    const pid = r.dataset.id;
+    if (pid && db.entries.some(e => e.placeId === pid) && !confirm('This place is used in your calendar. Delete anyway?')) return;
+    r.remove();
+  };
+  pl.querySelectorAll('.place-row').forEach(wire);
+  document.getElementById('plAdd').onclick = () => {
+    pl.insertAdjacentHTML('beforeend', `<div class="place-row" data-id=""><input type="color" value="#3aa0d8"><input type="text" placeholder="Place name"><button aria-label="Delete">−</button></div>`);
+    const r = pl.lastElementChild; wire(r); r.querySelector('input[type=text]').focus();
+  };
+  document.getElementById('plSave').onclick = () => {
+    db.places = [...pl.querySelectorAll('.place-row')].map(r => ({
+      id: r.dataset.id || uid(),
+      color: r.querySelector('input[type=color]').value,
+      name: r.querySelector('input[type=text]').value.trim()
+    })).filter(p => p.name);
+    save(); closeSheet();
+  };
+  document.getElementById('exp').onclick = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' }));
+    a.download = `timetable-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click();
+  };
+  const f = document.getElementById('impFile');
+  document.getElementById('imp').onclick = () => f.click();
+  f.onchange = async () => {
+    try {
+      const d = JSON.parse(await f.files[0].text());
+      if (!d.places || !d.entries) throw 0;
+      if (confirm('Replace current data with this backup?')) { db = d; save(); closeSheet(); }
+    } catch (e) { alert('That file is not a valid backup.'); }
+  };
+}
+document.getElementById('placesBtn').onclick = openPlaces;
+
+render();
+</script>
+</body>
+</html>
