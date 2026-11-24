@@ -1864,15 +1864,16 @@ async function supaAuth(path, body) {
   if (!res.ok) throw new Error(j.msg || j.error_description || j.message || 'Something went wrong');
   return j;
 }
-function keepSession(j) {
+function keepSession(j, refresh) {
   if (!j.access_token) return false;
+  if (!refresh) supa.fresh = true;
   saveSession({ access_token:j.access_token, refresh_token:j.refresh_token, expires_at: Date.now() + (j.expires_in || 3600) * 1000, user:{ id:j.user.id, email:j.user.email } });
   return true;
 }
 async function supaToken() {
   if (!supa.session) return null;
   if (Date.now() > supa.session.expires_at - 60000) {
-    try { keepSession(await supaAuth('token?grant_type=refresh_token', { refresh_token: supa.session.refresh_token })); }
+    try { keepSession(await supaAuth('token?grant_type=refresh_token', { refresh_token: supa.session.refresh_token }), true); }
     catch (e) { if (navigator.onLine) { saveSession(null); setSync('Signed out · tap Sign in to sync'); } return null; }
   }
   return supa.session.access_token;
@@ -1889,8 +1890,8 @@ async function supaPush() {
   supa.pushing = true; setSync('Syncing…');
   try {
     await supaRest('POST', '', { user_id: supa.session.user.id, data: db, updated: db.updated }, { Prefer:'resolution=merge-duplicates,return=minimal' });
-    setSync('☁︎ Synced');
-  } catch (e) { setSync(navigator.onLine ? '⚠️ Not synced yet' : 'Offline · saved on this device'); }
+    syncOk();
+  } catch (e) { syncFail(e); }
   supa.pushing = false;
   if (supa.again) { supa.again = false; supaPush(); }
 }
@@ -1899,13 +1900,44 @@ async function supaPull() {
   try {
     const rows = await supaRest('GET', `?select=data,updated&user_id=eq.${supa.session.user.id}`);
     const row = rows && rows[0];
-    if (!row) { if (db.updated) supaPush(); else setSync('☁︎ Synced'); return; }
+    if (!row) { supa.fresh = false; if (db.updated) supaPush(); else syncOk(); return; }
+    // First sync after signing in on a device that already has its own plans: combine both, never overwrite
+    if (supa.fresh) {
+      supa.fresh = false;
+      if (db.updated && db.entries.length && JSON.stringify(db.entries) !== JSON.stringify((row.data || {}).entries || [])) {
+        db = mergeData(normalize(row.data), db); db.updated = Date.now(); saveLocal(); lastSaved = JSON.stringify(db);
+        if (!sheetMode) render(); toast("This device's plans were combined with your account ✓", null, 6000);
+        return supaPush();
+      }
+    }
     if ((row.updated || 0) > db.updated) {
       db = normalize(row.data); db.updated = row.updated; saveLocal(); lastSaved = JSON.stringify(db);
       if (sheetMode === 'day') openDay(sheetDay); else if (sheetMode === 'todo') openTodo(); else if (!sheetMode) render(); else renderChips();
     } else if ((row.updated || 0) < db.updated) { supaPush(); return; }
-    setSync('☁︎ Synced');
-  } catch (e) { setSync(navigator.onLine ? '⚠️ Not synced yet' : 'Offline · saved on this device'); }
+    syncOk();
+  } catch (e) { syncFail(e); }
+}
+function syncOk() { supa.lastOk = Date.now(); supa.lastError = ''; setSync('☁︎ Synced'); }
+function syncFail(e) {
+  const m = (e && e.message) || String(e);
+  supa.lastError = !navigator.onLine ? 'No internet connection on this device.'
+    : /signed out/.test(m) ? 'You were signed out. Please sign in again.'
+    : /401|403|JWT/i.test(m) ? 'Your sign-in expired. Please sign out and sign in again.'
+    : /404|relation|timetables/i.test(m) ? 'The sync storage is not set up (timetables table missing).'
+    : /fetch|network|load failed/i.test(m) ? "Can't reach the sync service from this network. Try mobile data or another Wi-Fi."
+    : 'Sync error: ' + m;
+  setSync(navigator.onLine ? '⚠️ Not synced · tap for details' : 'Offline · saved on this device');
+}
+// Combine two calendars: everything from both, account wins when the same item/place exists in both
+function mergeData(remote, local) {
+  const byId = (a, b) => { const m = new Map(); a.forEach(x => m.set(x.id, x)); b.forEach(x => { if (!m.has(x.id)) m.set(x.id, x); }); return [...m.values()]; };
+  const out = normalize({ ...local, ...remote });
+  out.places = byId(remote.places || [], local.places || []);
+  out.entries = byId(remote.entries || [], local.entries || []);
+  out.templates = byId(remote.templates || [], local.templates || []);
+  out.prayerRemind = { ...(local.prayerRemind || {}), ...(remote.prayerRemind || {}) };
+  out.prayerEnd = { ...(local.prayerEnd || {}), ...(remote.prayerEnd || {}) };
+  return out;
 }
 function supaInit() {
   if (!supaOn()) return;
@@ -1957,9 +1989,12 @@ function showWelcome() {
 
 function openAccount() {
   if (supa.session) {
-    showSheet('Account', `<div class="box">Signed in as <b>${esc(supa.session.user.email)}</b><div class="meta">Your timetable syncs between every device where you sign in with this email.</div></div>
+    const ago = supa.lastOk ? Math.round((Date.now() - supa.lastOk) / 1000) : null;
+    showSheet('Account', `<div class="box">Signed in as <b>${esc(supa.session.user.email)}</b><div class="meta">Your timetable syncs between every device where you sign in with this <b>same email</b>.</div>
+      <div class="meta" style="margin-top:8px">${supa.lastError ? '⚠️ ' + esc(supa.lastError) : ago !== null ? '✅ Last synced ' + (ago < 60 ? ago + ' seconds' : Math.round(ago / 60) + ' minutes') + ' ago' : 'Not synced yet on this device'}<br>
+      This device has ${db.entries.length} plan${db.entries.length === 1 ? '' : 's'} and ${db.places.length} places.</div></div>
       <button class="secondary" id="acSync">Sync now</button><button class="danger" id="acOut">Sign out on this device</button>`, null, 'other');
-    document.getElementById('acSync').onclick = async () => { await supaPull(); toast('Synced'); };
+    document.getElementById('acSync').onclick = async () => { await supaPull(); await new Promise(rs => setTimeout(rs, 600)); openAccount(); toast(supa.lastError ? '⚠️ ' + supa.lastError : 'Synced ✓', null, 6000); };
     document.getElementById('acOut').onclick = async () => {
       try { await fetch(`${SUPA_URL}/auth/v1/logout`, { method:'POST', headers:{ apikey:SUPA_KEY, Authorization:'Bearer ' + supa.session.access_token } }); } catch (e) {}
       saveSession(null); closeSheet(); setSync('Sign in to sync →'); toast('Signed out. Your data stays on this device.');
