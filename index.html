@@ -260,6 +260,7 @@ function normalize(d) {
   d = d && d.places ? d : JSON.parse(JSON.stringify(DEFAULT));
   d.entries = (d.entries || []).map(e => ({ tasks:[], note:'', start:'', end:'', remind:null, repeat:null,
     skip:[], extra:[], done:{}, drop:{}, ...e }));
+  d.entries.forEach(e => { if (e.repeat && !e.repeat.anchor) e.repeat.anchor = e.date; });
   d.places.forEach(p => { if (p.remind === undefined) p.remind = null; });
   d.prayerRemind = d.prayerRemind || {};
   d.templates = d.templates || [];
@@ -353,12 +354,24 @@ function occurs(e, date) {
   if (e.extra.includes(date)) return true;
   if (date < e.date) return false;
   if (e.repeat.until && date > e.repeat.until) return false;
-  const d = parse(date);
-  if (e.repeat.freq === 'daily') return true;
-  if (e.repeat.freq === 'weekly') return (e.repeat.days || []).includes(d.getDay());
-  if (e.repeat.freq === 'monthly') return d.getDate() === parse(e.date).getDate();
+  const d = parse(date), r = e.repeat, anchor = r.anchor || e.date;
+  if (r.freq === 'daily') return true;
+  if (r.freq === 'weekly') {
+    if (!(r.days || []).includes(d.getDay())) return false;
+    const n = r.every || 1;
+    return n === 1 || ((weekNo(date) - weekNo(anchor)) % n + n) % n === 0;
+  }
+  if (r.freq === 'monthly') return d.getDate() === parse(anchor).getDate();
+  if (r.freq === 'monthNth') {
+    if (!(r.days || []).includes(d.getDay())) return false;
+    const nth = Math.ceil(d.getDate() / 7), last = d.getDate() + 7 > new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    return (r.nths || []).some(k => k === nth || (k === -1 && last));
+  }
   return false;
 }
+// Week number (weeks start on Saturday), safe across summer/winter time
+function weekNo(iso) { const [y, m, d] = iso.split('-').map(Number); const dn = Date.UTC(y, m - 1, d) / 864e5; return Math.floor((dn - (new Date(dn * 864e5).getUTCDay() + 1) % 7) / 7); }
+const NTH = [[1,'1st'],[2,'2nd'],[3,'3rd'],[4,'4th'],[5,'5th'],[-1,'Last']];
 const visible = e => !ui.filter.length || ui.filter.includes(e.placeId);
 function entriesFor(date, all) {
   return db.entries.filter(e => occurs(e, date) && (all || visible(e)))
@@ -369,8 +382,12 @@ function repeatText(r) {
   if (!r) return '';
   if (r.freq === 'daily') return 'Every day';
   if (r.freq === 'monthly') return 'Every month';
-  const names = COL2DOW.map((dow, i) => r.days.includes(dow) ? DAYS[i] : null).filter(Boolean);
-  return 'Every ' + (names.length === 7 ? 'day' : names.join(', '));
+  const names = COL2DOW.map((dow, i) => r.days.includes(dow) ? DAYS[i] : null).filter(Boolean).join(', ');
+  if (r.freq === 'monthNth') return NTH.filter(([k]) => (r.nths || []).includes(k)).map(([, l]) => l).join(' & ') + ` ${names} of every month`;
+  const n = r.every || 1;
+  if (n === 2) return `Every other ${names} (one week yes, one no)`;
+  if (n > 2) return `Every ${n} weeks on ${names}`;
+  return 'Every ' + (r.days.length === 7 ? 'day' : names);
 }
 
 /* ================= Prayer times (Alexandria, Egyptian General Authority) ================= */
@@ -614,6 +631,17 @@ function parseQuick(text, base) {
     m => { o.remind = +m[1] * { m:1, h:60, d:1440, w:10080 }[m[2][0].toLowerCase()]; });
   take(/\b(every\s*day|daily)\b/i, () => { o.repeat = { freq:'daily', days:[], until:'' }; });
   take(/\bmonthly\b/i, () => { o.repeat = { freq:'monthly', days:[], until:'' }; });
+  const DAYLIST = '((?:(?:sat|sun|mon|tue|wed|thu|fri)[a-z]*(?:\\s*(?:,|&|and)\\s*|\\s+|$))+)';
+  const dayNums = t => [...t.matchAll(/[a-z]+/gi)].map(x => DOW_N[x[0].slice(0, 3).toLowerCase()]).filter(x => x !== undefined);
+  take(new RegExp(`\\bevery\\s+(other|second|2nd|two|2|third|3rd|three|3|fourth|4th|four|4)\\s*(?:weeks?\\s*)?(?:on\\s+)?${DAYLIST}`, 'i'), m => {
+    const n = { other:2, second:2, '2nd':2, two:2, '2':2, third:3, '3rd':3, three:3, '3':3, fourth:4, '4th':4, four:4, '4':4 }[m[1].toLowerCase()];
+    const days = dayNums(m[2]); if (days.length) o.repeat = { freq:'weekly', days, every:n, until:'' };
+  });
+  take(new RegExp(`\\b(?:(?:the|every|each)\\s+)?((?:(?:1st|2nd|3rd|4th|5th|first|second|third|fourth|fifth|last)(?:\\s*(?:,|&|and)\\s*|\\s+))+)${DAYLIST}(?:\\s*of\\s*(?:every|each|the)?\\s*month)?`, 'i'), m => {
+    const map = { '1st':1, first:1, '2nd':2, second:2, '3rd':3, third:3, '4th':4, fourth:4, '5th':5, fifth:5, last:-1 };
+    const nths = [...m[1].matchAll(/[a-z0-9]+/gi)].map(x => map[x[0].toLowerCase()]).filter(x => x !== undefined), days = dayNums(m[2]);
+    if (nths.length && days.length) o.repeat = { freq:'monthNth', nths, days, until:'' };
+  });
   take(/\bevery\s+((?:(?:sat|sun|mon|tue|wed|thu|fri)[a-z]*(?:\s*(?:,|&|and)\s*|\s+))+)/i, m => {
     const days = [...m[1].matchAll(/[a-z]+/gi)].map(x => DOW_N[x[0].slice(0, 3).toLowerCase()]).filter(x => x !== undefined);
     if (days.length) o.repeat = { freq:'weekly', days, until:'' };
@@ -659,7 +687,7 @@ function openQuick(base) {
   showSheet('Quick add', `
     <input type="text" id="qaText" placeholder="e.g. PUA tomorrow 8:30-2 pt diagnosis, scaling" autocomplete="off" enterkeyhint="done">
     <div class="meta" style="margin-top:6px">Write place, day, time and tasks in any order. Separate tasks with commas.<br>
-      Examples: <i>Mounir sat 2-7pm pt nermin cbct</i> · <i>Yoga every tue 9pm</i> · <i>Clinic 12/12 10am remind 1h</i></div>
+      Examples: <i>Mounir sat 2-7pm pt nermin cbct</i> · <i>Yoga every tue 9pm</i> · <i>Clinic every other sun 10am</i> · <i>PUA 1st & 3rd sun 9-2</i> · <i>Clinic 12/12 10am remind 1h</i></div>
     <div class="box" id="qaPrev" style="display:none"></div>
     <div style="height:12px"></div>
     <div class="two"><button class="secondary" id="qaEdit" style="margin-top:0" disabled>Edit details</button><button class="primary" id="qaAdd" disabled>Add</button></div>`,
@@ -682,7 +710,13 @@ function openQuick(base) {
   const build = () => {
     let pid = cur.placeId;
     if (!pid) { const cols = ['#e0533d','#f29d38','#2a9d8f','#e76fa3','#5a6acf','#8a5a2b','#3aa0d8']; const p = { id:uid(), name:cur.newPlace, color:cols[db.places.length % cols.length], remind:null }; db.places.push(p); pid = p.id; }
-    return { id:uid(), date:cur.date, placeId:pid, start:cur.start, end:cur.end, tasks:cur.tasks, note:'', remind:cur.remind, repeat:cur.repeat, skip:[], extra:[], done:{}, drop:{} };
+    let date = cur.date;
+    if (cur.repeat) {   // start the series on its first real day
+      const probe = { repeat:{ ...cur.repeat, anchor:date }, date, skip:[], extra:[] };
+      for (let i = 0; i < 62 && !occurs(probe, date); i++) { date = addDays(date, 1); probe.date = date; probe.repeat.anchor = date; }
+      cur.date = date;
+    }
+    return { id:uid(), date:cur.date, placeId:pid, start:cur.start, end:cur.end, tasks:cur.tasks, note:'', remind:cur.remind, repeat:cur.repeat ? { ...cur.repeat, anchor:cur.date } : null, skip:[], extra:[], done:{}, drop:{} };
   };
   add.onclick = () => {
     if (!cur) return;
@@ -802,9 +836,13 @@ function openEditor(date, id) {
     <label>Repeat</label>
     <select id="fFreq">
       <option value="none">Never (this day only)</option><option value="daily">Every day</option>
-      <option value="weekly">Every week on…</option><option value="monthly">Every month (same date)</option>
+      <option value="weekly">Every week / every few weeks on…</option><option value="monthly">Every month (same date)</option>
+      <option value="monthNth">Every month on certain weeks (e.g. 1st & 3rd Sun)</option>
     </select>
     <div id="fRepeatBox">
+      <div id="fEveryWrap" class="row" style="margin-top:8px;align-items:center"><span style="flex:none">Repeat</span>
+        <select id="fEvery">${[[1,'every week'],[2,'every other week (one yes, one no)'],[3,'every 3 weeks'],[4,'every 4 weeks']].map(([v, l]) => `<option value="${v}" ${(r.every || 1) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div id="fNthWrap"><div class="lbl">Which weeks of the month</div><div class="days" id="fNth">${NTH.map(([k, l]) => `<button data-n="${k}" class="${(r.nths || [Math.ceil(parse(date).getDate() / 7)]).includes(k) ? 'on' : ''}">${l}</button>`).join('')}</div></div>
       <div id="fDaysWrap"><div class="days" id="fDays" style="margin-top:8px">${DAYS.map((d, i) => `<button data-dow="${COL2DOW[i]}" class="${r.days.includes(COL2DOW[i]) ? 'on' : ''}">${d}</button>`).join('')}</div></div>
       <div class="lbl">Until (optional)</div><input type="date" id="fUntil" value="${esc(r.until || '')}">
       ${orig && orig.repeat ? `<div class="meta" style="margin-top:8px">Starts ${shortDate(orig.date)}${orig.skip.length ? ` · removed on ${orig.skip.length} day(s)` : ''}${orig.extra.length ? ` · added on ${orig.extra.length} extra day(s)` : ''}</div>` : ''}
@@ -829,8 +867,11 @@ function openEditor(date, id) {
   const freq = document.getElementById('fFreq'); freq.value = e.repeat ? e.repeat.freq : 'none';
   const syncRepeatUI = () => {
     document.getElementById('fRepeatBox').style.display = freq.value === 'none' ? 'none' : '';
-    document.getElementById('fDaysWrap').style.display = freq.value === 'weekly' ? '' : 'none';
+    document.getElementById('fDaysWrap').style.display = ['weekly', 'monthNth'].includes(freq.value) ? '' : 'none';
+    document.getElementById('fEveryWrap').style.display = freq.value === 'weekly' ? '' : 'none';
+    document.getElementById('fNthWrap').style.display = freq.value === 'monthNth' ? '' : 'none';
   };
+  document.getElementById('fNth').onclick = ev => { const b = ev.target.closest('button'); if (b) b.classList.toggle('on'); };
   freq.onchange = syncRepeatUI; syncRepeatUI(); wirePicker('fRemind');
   document.getElementById('fDays').onclick = ev => { const b = ev.target.closest('button'); if (b) b.classList.toggle('on'); };
 
@@ -850,7 +891,10 @@ function openEditor(date, id) {
       tasks: [...tasksEl.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean),
       note: document.getElementById('fNote').value.trim(), remind: readPicker('fRemind'),
       repeat: f === 'none' ? null : { freq:f, until:document.getElementById('fUntil').value,
-        days: f === 'weekly' ? [...document.querySelectorAll('#fDays .on')].map(b => +b.dataset.dow) : [] }
+        anchor: (orig && orig.repeat && (orig.repeat.anchor || orig.date)) || date,
+        every: f === 'weekly' ? +document.getElementById('fEvery').value : 1,
+        nths: f === 'monthNth' ? [...document.querySelectorAll('#fNth .on')].map(b => +b.dataset.n) : [],
+        days: ['weekly', 'monthNth'].includes(f) ? [...document.querySelectorAll('#fDays .on')].map(b => +b.dataset.dow) : [] }
     };
   };
 
@@ -881,7 +925,8 @@ function openEditor(date, id) {
         return;
       }
     }
-    if (data.repeat && data.repeat.freq === 'weekly' && !data.repeat.days.length) return toast('Pick at least one day to repeat on');
+    if (data.repeat && ['weekly', 'monthNth'].includes(data.repeat.freq) && !data.repeat.days.length) return toast('Pick at least one day to repeat on');
+    if (data.repeat && data.repeat.freq === 'monthNth' && !data.repeat.nths.length) return toast('Pick which weeks of the month');
     if (!orig) {
       withUndo('Added', () => db.entries.push({ ...e, ...data, id:uid(), date }), () => openDay(date));
     } else if (orig.repeat) {
