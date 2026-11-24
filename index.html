@@ -32,6 +32,7 @@
   }
   :root[data-theme=dark] { --bg:#000; --text:#f2f2f2; --line:#2c2c2e; --weekend:#111113; --sheet:#1c1c1e; --soft:#2c2c2e; --prayer:#38c9a3; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html { -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
     font-family:-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; }
   body { display:flex; flex-direction:column; padding-top:env(safe-area-inset-top); overflow:hidden; }
@@ -115,9 +116,13 @@
   .wk-col { position:relative; border-left:1px solid var(--line);
     background-image:linear-gradient(var(--line) 1px, transparent 1px); background-size:100% var(--h); }
   .wk-col.we { background-color:var(--weekend); }
-  .blk { position:absolute; left:2px; right:2px; border-radius:6px; padding:2px 4px; font-size:10px; line-height:1.25;
+  .blk { position:absolute; left:2px; right:2px; border-radius:6px; padding:2px 2px 2px 3px; font-size:10px; line-height:1.25;
     overflow:hidden; cursor:pointer; color:#fff; z-index:1; font-size:calc(10px * var(--ts,1)); }
-  .blk .tm { font-size:.9em; display:block; }
+  .blk .tm { font-size:calc(8.5px * var(--ts,1)); display:block; }
+  .blk > b { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:calc(9.5px * var(--ts,1)); }
+  @media (min-width:700px) { .blk .bt { font-size:calc(10px * var(--ts,1)); } .blk .tm { font-size:calc(10px * var(--ts,1)); } .blk > b { font-size:calc(11px * var(--ts,1)); } }
+  .blk .bt { display:block; font-size:calc(8px * var(--ts,1)); font-weight:500; line-height:1.15; letter-spacing:-.1px; margin-top:2px; padding-top:2px;
+    border-top:1px solid rgba(255,255,255,.35); overflow-wrap:break-word; }
   .blk { box-shadow:0 0 0 1px var(--bg); }
   .blk.alt { filter:brightness(.82) saturate(1.1); }
   .blk.ov { border:1.5px solid rgba(255,255,255,.85); }
@@ -561,7 +566,7 @@ function renderWeek(fitH) {
       const left = L.lane / L.cols * 100, width = 100 / L.cols;
       boxes.push({ top, bot: top + h, left, width });
       const dn = doneSet(en, date);
-      const tasks = en.tasks.map((t, ti) => t ? `<span class="${dn.has(ti) ? 'done' : ''}">${esc(t)}</span>` : '').filter(Boolean).join(', ');
+      const tasks = en.tasks.map((t, ti) => t ? `<span class="bt${dn.has(ti) ? ' done' : ''}">${esc(t)}</span>` : '').join('');
       c += `<div class="blk${L.cols > 1 ? ' ov' : ''}${L.cols > 1 && L.lane % 2 ? ' alt' : ''}" style="top:${top}px;height:${h}px;left:calc(${left}% + 1px);width:calc(${width}% - 2px);background:${esc(p.color)}" data-date="${date}" data-id="${en.id}"><b>${esc(p.name)}</b><span class="tm">${fmtRange(en.start, en.end)}</span>${tasks}</div>`;
     });
     const pt = prayerTimes(date);
