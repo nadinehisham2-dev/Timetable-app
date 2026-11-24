@@ -1,0 +1,14 @@
+# Netlify settings: plain website, no build step
+[build]
+  publish = "."
+  command = ""
+
+# Always fetch the newest app version (offline copy updates itself)
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
