@@ -78,6 +78,9 @@
   .chip { flex:none; border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:16px;
     padding:4px 11px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:5px; }
   .chip.on { border-color:transparent; background:var(--text); color:var(--bg); }
+  #filterBar { display:flex; align-items:center; gap:10px; background:#fff4e5; color:#7a4a00; border-radius:10px; padding:6px 10px; font-size:13px; margin:2px 0 6px; }
+  #filterBar span { flex:1; } #filterBar button { border:none; background:#7a4a00; color:#fff; border-radius:8px; padding:5px 10px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
+  @media (prefers-color-scheme: dark) { #filterBar { background:#3a2a10; color:#ffd59a; } #filterBar button { background:#ffd59a; color:#3a2a10; } }
   .chip.addp { font-size:18px; font-weight:600; padding:2px 12px; color:var(--accent); border-style:dashed; line-height:1.2; }
   .swatches { display:flex; flex-wrap:wrap; gap:10px; }
   .swatches button, .swcustom { width:34px; height:34px; border-radius:50%; border:3px solid var(--sheet); box-shadow:0 0 0 1px var(--line); cursor:pointer; padding:0; }
@@ -605,6 +608,13 @@ function renderChips() {
   el.innerHTML = `<button class="chip ${ui.filter.length ? '' : 'on'}" data-p="">All</button>` +
     db.places.map(p => `<button class="chip ${ui.filter.includes(p.id) ? 'on' : ''}" data-p="${esc(p.id)}"><span class="dot" style="background:${esc(p.color)}"></span>${esc(p.name)}</button>`).join('') +
     `<button class="chip addp" id="addPlace" aria-label="Add a place" title="Add a place">+</button>`;
+  // Make it obvious when only some places are shown
+  let fb = document.getElementById('filterBar');
+  if (!fb) { fb = document.createElement('div'); fb.id = 'filterBar'; el.after(fb); }
+  const names = ui.filter.map(id => place(id).name);
+  fb.style.display = names.length ? '' : 'none';
+  fb.innerHTML = names.length ? `<span>👁 Showing only <b>${names.map(esc).join(', ')}</b>. Other places are hidden.</span><button id="fbAll">Show all</button>` : '';
+  const fa = document.getElementById('fbAll'); if (fa) fa.onclick = () => { ui.filter = []; saveUI(); render(); };
 }
 const PLACE_COLORS = ['#2a9d8f','#3b5bdb','#e8590c','#d6336c','#7048e8','#2f9e44','#f08c00','#1098ad','#c92a2a','#495057'];
 function openNewPlace() {
