@@ -545,8 +545,8 @@ function renderWeek(fitH) {
   const START_H = Math.floor(first / 60), hoursShown = 24 - START_H;
   H = fitH || Math.round((isSideways() ? 34 : 30) * (ui.ts || 1));
   const s = parse(ws), e = parse(dates[6]), same = s.getMonth() === e.getMonth();
-  document.getElementById('mName').textContent = same ? MONTHS[s.getMonth()] : `${s.getDate()} ${MONTHS[s.getMonth()].slice(0, 3)} – ${e.getDate()} ${MONTHS[e.getMonth()].slice(0, 3)}`;
-  document.getElementById('yName').textContent = same ? `${s.getDate()}–${e.getDate()}, ${e.getFullYear()}` : e.getFullYear();
+  document.getElementById('mName').textContent = same ? MONTHS[s.getMonth()] : `${MONTHS[s.getMonth()].slice(0, 3)}–${MONTHS[e.getMonth()].slice(0, 3)}`;
+  document.getElementById('yName').textContent = e.getFullYear();
   const y = m => (m / 60 - START_H) * H;
   let head = '<div></div>', all = '<div>all-day</div>', cols = '';
   dates.forEach((date, i) => {
