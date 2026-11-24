@@ -1300,6 +1300,7 @@ function openReminders() {
   const placeOpts = `<option value="all">All places</option>` + db.places.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
   const perm = 'Notification' in window ? Notification.permission : 'unsupported';
   showSheet('Reminders', `
+    ${supaOn() ? `<div class="box" id="pushBox" style="margin:0 0 6px">Checking notifications…</div>` : ''}
     <div class="meta">To remind you of one item only, open it and pick a reminder in Edit. Use this to set reminders for many items at once.</div>
     <label>Set reminders for</label><select id="rPlace">${placeOpts}</select>
     <label>Remind me</label>${remindPicker('rWhen', 30)}
@@ -1316,7 +1317,8 @@ function openReminders() {
     <label>Which places</label><select id="xPlace">${placeOpts}<option value="none">None (prayers only)</option></select>
     <label class="chk" style="text-transform:none;letter-spacing:0;font-size:15px;color:inherit"><input type="checkbox" id="xPrayers" ${Object.values(db.prayerRemind).some(v => v != null) ? 'checked' : ''}> Include prayer reminders</label>
     <button class="secondary" id="rExport">📅 Add next 3 months to Calendar</button>`}
-    ${perm === 'default' ? '<button class="secondary" id="rPerm">Allow pop-up notifications</button>' : ''}`, null, 'other');
+    ${perm === 'default' && !supaOn() ? '<button class="secondary" id="rPerm">Allow pop-up notifications</button>' : ''}`, null, 'other');
+  if (supaOn()) renderPushBox();
   wirePicker('rWhen');
   const pks = PRAYERS.filter(([k]) => k !== 'sunrise').map(([k]) => k);
   pks.forEach(k => wirePicker('pr_' + k));
@@ -1332,7 +1334,7 @@ function openReminders() {
   document.getElementById('prSave').onclick = () => {
     const vals = {}; for (const k of pks) { const v = readPicker('pr_' + k); if (v === undefined) return toast('Type how many minutes before'); vals[k] = v; }
     withUndo('Prayer reminders saved', () => { db.prayerRemind = vals; });
-    document.getElementById('xPrayers').checked = Object.values(vals).some(v => v != null);
+    const xp = document.getElementById('xPrayers'); if (xp) xp.checked = Object.values(vals).some(v => v != null);
   };
   document.getElementById('rApply').onclick = () => {
     const pid = document.getElementById('rPlace').value, val = readPicker('rWhen');
@@ -1403,7 +1405,7 @@ function checkReminders() {
         fired.add(key);
         const msg = m ? `🕌 ${name} in ${remindLabel(m).replace(' before', '')} (${fmtTime(pt[k])})` : `🕌 It's time for ${name}`;
         toast(msg, null, 15000);
-        try { if ('Notification' in window && Notification.permission === 'granted') new Notification(msg); } catch (er) {}
+        try { if (!supaOn() && 'Notification' in window && Notification.permission === 'granted') new Notification(msg); } catch (er) {}
       }
     });
   }
@@ -1416,7 +1418,7 @@ function checkReminders() {
       const days = Math.round((parse(date) - parse(todayIso())) / 864e5);
       const msg = `⏰ ${place(e.placeId).name}${e.start ? ' at ' + fmtTime(e.start) : ''}${days === 1 ? ' tomorrow' : days > 1 ? ' on ' + shortDate(date) : ''}`;
       toast(msg, null, 15000);
-      try { if ('Notification' in window && Notification.permission === 'granted') new Notification(msg, { body: e.tasks.join(', ') }); } catch (er) {}
+      try { if (!supaOn() && 'Notification' in window && Notification.permission === 'granted') new Notification(msg, { body: e.tasks.join(', ') }); } catch (er) {}
     }
   }));
 }
@@ -1501,6 +1503,69 @@ async function pushRemote() {
   writing = false;
   if (pending) { pending = false; pushRemote(); }
 }
+/* ================= Notifications (installed app) ================= */
+const VAPID_PUBLIC = 'BCZNELbcnqfLIoxOod4yNgDg_AXqT7onSMqDU3czz5B0ZwbdyFWB8zILgWfDEoAOothIMZn11iHsIHMUvVKdEZA';
+const isStandalone = () => window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const pushOn = () => { try { return localStorage.getItem('tt-push') === '1' && Notification.permission === 'granted'; } catch (e) { return false; } };
+async function swReg() { const r = await navigator.serviceWorker.register('sw.js'); await navigator.serviceWorker.ready; return r; }
+async function supaTable(table, method, query, body, extra) {
+  const tok = await supaToken(); if (!tok) throw new Error('signed out');
+  const res = await fetch(`${SUPA_URL}/rest/v1/${table}${query}`, { method, headers:{ apikey:SUPA_KEY, Authorization:'Bearer ' + tok, 'Content-Type':'application/json', ...(extra || {}) }, body: body ? JSON.stringify(body) : undefined });
+  if (!res.ok) throw new Error(`${table} ${res.status}`);
+  return res.status === 204 || res.status === 201 ? null : res.json();
+}
+async function renderPushBox() {
+  const box = document.getElementById('pushBox'); if (!box) return;
+  const set = html => { box.innerHTML = html; };
+  if (!supa.session) { set(`<b>🔔 Notifications</b><div class="meta">Sign in first, so your reminders can reach all your devices.</div><button class="secondary" id="pbSign">Sign in to sync</button>`); document.getElementById('pbSign').onclick = openAccount; return; }
+  if (isIOS() && !isStandalone()) { set(`<b>🔔 Notifications</b><div class="meta">On iPhone and iPad, notifications only work in the app opened from its <b>Home Screen icon</b>. In Safari tap <b>Share → Add to Home Screen</b>, then open Timetable from the icon and come back here.</div>`); return; }
+  if (!pushSupported()) { set(`<b>🔔 Notifications</b><div class="meta">This device or browser can't receive notifications. On iPhone/iPad, update to iOS 16.4 or newer.</div>`); return; }
+  if (pushOn()) {
+    set(`<b>🔔 Notifications are on for this device</b><div class="meta">You'll be notified at each reminder time, even when the app is closed.</div>
+      <div class="two"><button class="secondary" id="pbTest">Send a test</button><button class="secondary" id="pbOff">Turn off here</button></div><div class="meta" id="pbMsg"></div>`);
+    document.getElementById('pbTest').onclick = testPush;
+    document.getElementById('pbOff').onclick = async () => {
+      try { const reg = await swReg(), sub = await reg.pushManager.getSubscription();
+        if (sub) { await supaTable('push_subs', 'DELETE', `?endpoint=eq.${encodeURIComponent(sub.endpoint)}`).catch(() => {}); await sub.unsubscribe(); } } catch (e) {}
+      try { localStorage.removeItem('tt-push'); } catch (e) {}
+      toast('Notifications turned off on this device'); renderPushBox();
+    };
+    return;
+  }
+  if (Notification.permission === 'denied') { set(`<b>🔔 Notifications are blocked</b><div class="meta">Turn them on in <b>Settings → Notifications → Timetable</b>, then come back here.</div>`); return; }
+  set(`<b>🔔 Get notified at reminder times</b><div class="meta">Works even when the app is closed. Do this once on each device.</div><button class="primary" id="pbOn">Turn on notifications</button><div class="meta" id="pbMsg"></div>`);
+  document.getElementById('pbOn').onclick = enablePush;
+}
+async function enablePush() {
+  const msg = t => { const m = document.getElementById('pbMsg'); if (m) m.textContent = t; };
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { msg('Notifications were not allowed.'); return renderPushBox(); }
+    msg('Setting up…');
+    const reg = await swReg();
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: Uint8Array.from(atob(VAPID_PUBLIC.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)) });
+    await supaTable('push_subs', 'POST', '', { endpoint: sub.endpoint, user_id: supa.session.user.id, sub: sub.toJSON() }, { Prefer:'resolution=merge-duplicates,return=minimal' });
+    try { localStorage.setItem('tt-push', '1'); } catch (e) {}
+    toast('Notifications on ✓'); renderPushBox(); setTimeout(testPush, 400);
+  } catch (e) { msg("Couldn't turn on notifications (" + e.message + '). Check your internet and try again.'); }
+}
+async function testPush() {
+  const msg = t => { const m = document.getElementById('pbMsg'); if (m) m.innerHTML = t; };
+  msg('Sending a test…');
+  try {
+    const tok = await supaToken();
+    const res = await fetch(`${SUPA_URL}/functions/v1/reminders`, { method:'POST', headers:{ apikey:SUPA_KEY, Authorization:'Bearer ' + tok, 'Content-Type':'application/json' }, body:'{"test":true}' });
+    const j = await res.json().catch(() => ({}));
+    if (res.status === 404) return msg('⚠️ The reminder sender isn\'t set up in Supabase yet (step 2).');
+    if (!res.ok) return msg('⚠️ ' + (j.error || j.message || 'Test failed (' + res.status + ')'));
+    const age = j.lastCheck ? Math.round((Date.now() - new Date(j.lastCheck)) / 1000) : null;
+    msg(`Test sent to ${j.sent} of ${j.devices} device${j.devices === 1 ? '' : 's'}. ` + (age !== null && age < 180 ? `✅ Automatic checks are running (last one ${age}s ago).` : '⚠️ Automatic checks aren\'t running yet: check the Cron step, and that "Verify JWT" is off for the function.'));
+  } catch (e) { msg('⚠️ Could not reach Supabase: ' + e.message); }
+}
+
 /* ================= Account & sync (installed app, outside Claude) ================= */
 // Filled in once the Supabase project exists. Both values are safe to publish.
 const SUPA_URL = 'https://mcsujcizmclspbfixeso.supabase.co';
