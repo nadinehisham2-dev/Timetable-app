@@ -215,7 +215,9 @@
   .place-row input[type=color] { width:42px; height:36px; padding:2px; flex:none; }
   .box { background:var(--soft); border-radius:12px; padding:12px; margin-top:10px; font-size:15px; line-height:1.45; }
   .warn { color:var(--accent); font-weight:600; }
-  .prow { display:grid; grid-template-columns:72px 1fr; align-items:start; gap:8px; padding:6px 0; }
+  .prow { display:grid; grid-template-columns:72px 1fr; align-items:start; gap:8px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .prl2 { font-size:12px; color:var(--muted); margin:2px 0 4px; } .prl2 span { opacity:.8; }
+  .prow > div > select + div + .prl2, .prow .row + .prl2 { margin-top:8px; }
   .prow b { padding-top:11px; color:var(--prayer); }
   .badge { border:none; background:var(--soft); color:var(--accent); border-radius:12px; font-size:12px; font-weight:600; padding:3px 9px; margin-right:6px; cursor:pointer; }
   .todo { display:flex; align-items:center; gap:4px; border-bottom:1px solid var(--line); }
@@ -357,6 +359,7 @@ function normalize(d) {
   d.entries.forEach(e => { if (e.repeat && !e.repeat.anchor) e.repeat.anchor = e.date; });
   d.places.forEach(p => { if (p.remind === undefined) p.remind = null; });
   d.prayerRemind = d.prayerRemind || {};
+  d.prayerEnd = d.prayerEnd || {};   // reminder before the next prayer (prayer time ending)
   d.templates = d.templates || [];
   d.carryFrom = d.carryFrom || todayIsoRaw();
   if (d.carryRepeats === undefined) d.carryRepeats = false;
@@ -550,6 +553,11 @@ function prayerTimes(date) {
   for (const k in t) { const mins = Math.round((t[k] + tz - LNG / 15) * 60); out[k] = `${pad(Math.floor(mins / 60) % 24)}:${pad(mins % 60)}`; }
   return (prayerCache[date] = out);
 }
+// The prayer (or sunrise) that ends each prayer's time
+const NEXT_OF = { fajr:['sunrise', 'Sunrise', 0], dhuhr:['asr', 'Asr', 0], asr:['maghrib', 'Maghrib', 0], maghrib:['isha', 'Isha', 0], isha:['fajr', 'Fajr', 1] };
+function nextPrayerOf(k, date) { const [nk, name, add] = NEXT_OF[k]; const d = addDays(date, add); return { name, date:d, time: prayerTimes(d)[nk] }; }
+const PRAYER_END_OPTS = [null, 5, 10, 15, 20, 30, 45, 60];
+const prBell = k => db.prayerRemind[k] != null || (db.prayerEnd || {})[k] != null;
 const PRAYERS = [['fajr','Fajr'],['sunrise','Sunrise'],['dhuhr','Dhuhr'],['asr','Asr'],['maghrib','Maghrib'],['isha','Isha']];
 function nextPrayer() {
   const now = new Date(), n = now.getHours() * 60 + now.getMinutes();
@@ -667,7 +675,7 @@ function renderWeek(fitH) {
   PRAYERS.forEach(([k, name]) => {
     if (k === 'sunrise') return;
     const py = y(toMin(refPt[k])); if (py < 0) return;
-    gutter += `<div class="gpl" style="top:${py}px"><b>${name}${db.prayerRemind[k] != null ? '🔔' : ''}</b>${fmtTime(refPt[k])}</div>`;
+    gutter += `<div class="gpl" style="top:${py}px"><b>${name}${prBell(k) ? '🔔' : ''}</b>${fmtTime(refPt[k])}</div>`;
   });
   let hours = ''; for (let h = START_H; h < 24; h++) hours += `<div>${H < 22 && h % 2 ? '' : h === 12 ? '12pm' : h > 12 ? h - 12 + 'pm' : h + 'am'}</div>`;
   main.innerHTML = `<div class="week" style="--h:${H}px"><div class="wk-head">${head}</div><div class="wk-all">${all}</div>
@@ -912,7 +920,7 @@ function openDay(date) {
   cursor = parse(date); pickedIso = date;   // month and week views both follow the day you last opened
   const pt = prayerTimes(date), np = nextPrayer();
   let html = '<div class="prayers">' + PRAYERS.map(([k, n]) =>
-    `<div class="${np && np.date === date && np.k === k ? 'next' : ''}">${n}${db.prayerRemind[k] != null ? ' 🔔' : ''}<b>${fmtTime(pt[k])}</b></div>`).join('') + '</div>';
+    `<div class="${np && np.date === date && np.k === k ? 'next' : ''}">${n}${prBell(k) ? ' 🔔' : ''}<b>${fmtTime(pt[k])}</b></div>`).join('') + '</div>';
   const list = entriesFor(date, true);
   if (!list.length) html += '<div class="empty-msg">Nothing planned yet.</div>';
   list.forEach(e => {
@@ -1499,7 +1507,11 @@ function openReminders() {
     <div class="meta" style="margin-top:6px">Applies to everything already planned for that place, and to new items you add there.</div>
 
     <div class="lbl" style="margin-top:24px">🕌 Prayer reminders</div>
-    ${PRAYERS.filter(([k]) => k !== 'sunrise').map(([k, n]) => `<div class="prow"><b>${n}</b><div>${remindPicker('pr_' + k, db.prayerRemind[k] ?? null, PRAYER_OPTS, 'At adhan time')}</div></div>`).join('')}
+    <div class="meta">For each prayer you can have a reminder at (or before) adhan, plus a second one before the next prayer, so you can still pray in time.</div>
+    ${PRAYERS.filter(([k]) => k !== 'sunrise').map(([k, n]) => `<div class="prow"><b>${n}</b><div>
+      <div class="prl2">At prayer time</div>${remindPicker('pr_' + k, db.prayerRemind[k] ?? null, PRAYER_OPTS, 'At adhan time')}
+      <div class="prl2">Before ${NEXT_OF[k][1]} <span>(${n} time ends)</span></div>${remindPicker('pe_' + k, db.prayerEnd[k] ?? null, PRAYER_END_OPTS)}
+    </div></div>`).join('')}
     <div class="two" style="margin-top:8px"><button class="secondary" id="prAll">Copy Fajr's setting to all</button><button class="primary" id="prSave" style="margin-top:8px">Save prayer reminders</button></div>
 
     <div class="lbl" style="margin-top:24px">Get alerts when the app is closed</div>
@@ -1511,20 +1523,27 @@ function openReminders() {
   if (supaOn()) renderPushBox();
   wirePicker('rWhen');
   const pks = PRAYERS.filter(([k]) => k !== 'sunrise').map(([k]) => k);
-  pks.forEach(k => wirePicker('pr_' + k));
+  pks.forEach(k => { wirePicker('pr_' + k); wirePicker('pe_' + k); });
   document.getElementById('prAll').onclick = () => {
-    const src = document.getElementById('pr_fajr');
-    pks.forEach(k => {
-      document.getElementById('pr_' + k).value = src.value;
-      document.getElementById('pr_' + k + 'C').style.display = src.value === 'custom' ? '' : 'none';
-      document.getElementById('pr_' + k + 'N').value = document.getElementById('pr_fajrN').value;
-      document.getElementById('pr_' + k + 'U').value = document.getElementById('pr_fajrU').value;
+    ['pr_', 'pe_'].forEach(pre => {
+      const src = document.getElementById(pre + 'fajr');
+      pks.forEach(k => {
+        document.getElementById(pre + k).value = src.value;
+        document.getElementById(pre + k + 'C').style.display = src.value === 'custom' ? '' : 'none';
+        document.getElementById(pre + k + 'N').value = document.getElementById(pre + 'fajrN').value;
+        document.getElementById(pre + k + 'U').value = document.getElementById(pre + 'fajrU').value;
+      });
     });
   };
   document.getElementById('prSave').onclick = () => {
-    const vals = {}; for (const k of pks) { const v = readPicker('pr_' + k); if (v === undefined) return toast('Type how many minutes before'); vals[k] = v; }
-    withUndo('Prayer reminders saved', () => { db.prayerRemind = vals; });
-    const xp = document.getElementById('xPrayers'); if (xp) xp.checked = Object.values(vals).some(v => v != null);
+    const vals = {}, ends = {};
+    for (const k of pks) {
+      const v = readPicker('pr_' + k), w = readPicker('pe_' + k);
+      if (v === undefined || w === undefined) return toast('Type how many minutes before');
+      vals[k] = v; ends[k] = w;
+    }
+    withUndo('Prayer reminders saved', () => { db.prayerRemind = vals; db.prayerEnd = ends; });
+    const xp = document.getElementById('xPrayers'); if (xp) xp.checked = [...Object.values(vals), ...Object.values(ends)].some(v => v != null);
   };
   document.getElementById('rApply').onclick = () => {
     const pid = document.getElementById('rPlace').value, val = readPicker('rWhen');
@@ -1570,6 +1589,14 @@ function buildICS(pid, from, days, prayers) {
           'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${name}`, `TRIGGER:-PT${m}M`, 'END:VALARM', 'END:VEVENT');
         n++;
       });
+      PRAYERS.forEach(([k, name]) => {
+        const m = (db.prayerEnd || {})[k]; if (m == null || !NEXT_OF[k]) return;
+        const nx = nextPrayerOf(k, date), ymd2 = nx.date.replace(/-/g, ''), t = nx.time.replace(':', '');
+        lines.push('BEGIN:VEVENT', `UID:prayerend-${k}-${ymd}@timetable`, `DTSTAMP:${stamp}`,
+          `DTSTART;TZID=Africa/Cairo:${ymd2}T${t}00`, `DTEND;TZID=Africa/Cairo:${ymd2}T${t}00`, `SUMMARY:🕌 Pray ${name} before ${nx.name}`,
+          'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:Pray ${name} before ${nx.name}`, `TRIGGER:-PT${m}M`, 'END:VALARM', 'END:VEVENT');
+        n++;
+      });
     }
   }
   lines.push('END:VCALENDAR');
@@ -1586,7 +1613,7 @@ const fired = new Set();
 function checkReminders() {
   const now = Date.now();
   const maxDays = Math.min(60, Math.ceil(Math.max(0, ...db.entries.map(e => e.remind || 0)) / 1440) + 1);
-  for (let off = 0; off <= 1; off++) {
+  for (let off = -1; off <= 1; off++) {   // yesterday too, for Isha's reminder before Fajr
     const date = addDays(todayIso(), off), pt = prayerTimes(date);
     PRAYERS.forEach(([k, name]) => {
       const m = db.prayerRemind[k]; if (m == null) return;
@@ -1594,6 +1621,17 @@ function checkReminders() {
       if (now >= at && now < at + 15 * 60000 && !fired.has(key)) {
         fired.add(key);
         const msg = m ? `🕌 ${name} in ${remindLabel(m).replace(' before', '')} (${fmtTime(pt[k])})` : `🕌 It's time for ${name}`;
+        toast(msg, null, 15000);
+        try { if (!supaOn() && 'Notification' in window && Notification.permission === 'granted') new Notification(msg); } catch (er) {}
+      }
+    });
+    PRAYERS.forEach(([k, name]) => {
+      const m = (db.prayerEnd || {})[k]; if (m == null || !NEXT_OF[k]) return;
+      const nx = nextPrayerOf(k, date), d = parse(nx.date); d.setMinutes(toMin(nx.time));
+      const at = d.getTime() - m * 60000, key = 'pe' + k + date + m;
+      if (now >= at && now < at + 15 * 60000 && !fired.has(key)) {
+        fired.add(key);
+        const msg = `🕌 Have you prayed ${name}? ${nx.name} is in ${remindLabel(m).replace(' before', '')} (${fmtTime(nx.time)})`;
         toast(msg, null, 15000);
         try { if (!supaOn() && 'Notification' in window && Notification.permission === 'granted') new Notification(msg); } catch (er) {}
       }

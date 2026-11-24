@@ -108,6 +108,7 @@ function prayerMinutes(date) {
 }
 function fmtTime(mins) { let h = Math.floor(mins / 60) % 24, m = mins % 60; const ap = h >= 12 ? 'pm' : 'am'; h = h % 12 || 12; return m ? `${h}:${pad(m)}${ap}` : `${h}${ap}`; }
 const remindText = m => m === 0 ? 'now' : m % 10080 === 0 ? `in ${m / 10080} week${m > 10080 ? 's' : ''}` : m % 1440 === 0 ? (m === 1440 ? 'tomorrow' : `in ${m / 1440} days`) : m % 60 === 0 ? `in ${m / 60} hour${m > 60 ? 's' : ''}` : `in ${m} min`;
+const NEXT_OF = { fajr:['sunrise', 'Sunrise', 0], dhuhr:['asr', 'Asr', 0], asr:['maghrib', 'Maghrib', 0], maghrib:['isha', 'Isha', 0], isha:['fajr', 'Fajr', 1] };
 const PRAYERS = [['fajr', 'Fajr'], ['dhuhr', 'Dhuhr'], ['asr', 'Asr'], ['maghrib', 'Maghrib'], ['isha', 'Isha']];
 
 // Everything due between (now - WINDOW_MS) and now for one person's timetable
@@ -124,13 +125,22 @@ function dueReminders(data, now) {
       out.push({ key:`${e.id}|${date}|${e.remind}`, title:`${p.name}${e.start ? ' at ' + fmtTime(startMin) : ''}`,
         body:[remindText(e.remind) === 'now' ? 'Starting now' : `Starts ${remindText(e.remind)}`, ...(e.tasks || []).filter(Boolean)].join(' · '), date });
     }
-    if (i < 0 || i > 1) continue;
+    if (i > 1) continue;   // yesterday is included so Isha's 'before Fajr' reminder works after midnight
     const pt = prayerMinutes(date), pr = data.prayerRemind || {};
     for (const [k, name] of PRAYERS) {
       const m = pr[k]; if (m == null) continue;
       const at = cairoToUtc(date, pt[k]) - m * 60000;
       if (at > now || at <= now - WINDOW_MS) continue;
       out.push({ key:`prayer|${k}|${date}|${m}`, title: m ? `🕌 ${name} ${remindText(m)}` : `🕌 It's time for ${name}`, body:`${name} at ${fmtTime(pt[k])}`, date });
+    }
+    // second reminder: before the next prayer (so this prayer isn't missed)
+    const pe = data.prayerEnd || {};
+    for (const [k, name] of PRAYERS) {
+      const m = pe[k]; if (m == null) continue;
+      const [nk, nName, add] = NEXT_OF[k], nDate = addDays(date, add), nMin = prayerMinutes(nDate)[nk];
+      const at = cairoToUtc(nDate, nMin) - m * 60000;
+      if (at > now || at <= now - WINDOW_MS) continue;
+      out.push({ key:`prayerend|${k}|${date}|${m}`, title:`🕌 Have you prayed ${name}?`, body:`${nName} is ${remindText(m)} (${fmtTime(nMin)})`, date });
     }
   }
   return out;
