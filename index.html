@@ -485,10 +485,10 @@ function layoutLanes(list) {
 const isSideways = () => window.matchMedia('(max-height:500px)').matches;
 function renderWeek(fitH) {
   const ws = weekStart(), dates = [...Array(7)].map((_, i) => addDays(ws, i)), today = todayIso();
-  // Show the day from the earliest of Fajr / first item, until midnight
-  let first = 24 * 60;
-  dates.forEach(d => { first = Math.min(first, toMin(prayerTimes(d).fajr), ...entriesFor(d).filter(x => x.start).map(x => toMin(x.start))); });
-  const START_H = Math.max(0, Math.floor(first / 60) - (first % 60 < 30 ? 1 : 0)), hoursShown = 24 - START_H;
+  // Start at 7am; start earlier only if an item that week begins before 7am
+  let first = 7 * 60;
+  dates.forEach(d => { first = Math.min(first, ...entriesFor(d).filter(x => x.start).map(x => toMin(x.start))); });
+  const START_H = Math.floor(first / 60), hoursShown = 24 - START_H;
   H = fitH || Math.round((isSideways() ? 34 : 30) * (ui.ts || 1));
   const s = parse(ws), e = parse(dates[6]), same = s.getMonth() === e.getMonth();
   document.getElementById('mName').textContent = same ? MONTHS[s.getMonth()] : `${s.getDate()} ${MONTHS[s.getMonth()].slice(0, 3)} – ${e.getDate()} ${MONTHS[e.getMonth()].slice(0, 3)}`;
@@ -513,7 +513,8 @@ function renderWeek(fitH) {
     const pt = prayerTimes(date);
     PRAYERS.forEach(([k, name]) => {
       if (k === 'sunrise') return;
-      const py = y(toMin(pt[k])), hit = boxes.filter(b => py >= b.top && py <= b.bot);
+      const py = y(toMin(pt[k])); if (py < 0) return;
+      const hit = boxes.filter(b => py >= b.top && py <= b.bot);
       const onRight = hit.some(b => b.left + b.width > 99);
       c += `<div class="pr" style="top:${py}px"></div>`;
       hit.forEach(b => { c += `<div class="pr hit" style="top:${py}px;left:${b.left}%;width:${b.width}%"></div>`; });
