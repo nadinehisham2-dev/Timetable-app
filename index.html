@@ -222,6 +222,47 @@
   .res { padding:10px 0; border-bottom:1px solid var(--line); cursor:pointer; }
   .res small { color:var(--muted); display:block; }
 
+
+  /* ===== Welcome / sign-in page (installed app) ===== */
+  .welcome { position:fixed; inset:0; z-index:60; display:none; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    background:url('img/welcome.webp') no-repeat right bottom / contain, linear-gradient(165deg, #a2dcd4 0%, #96d7ce 45%, #8ed1c6 100%);
+    padding:calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom));
+    align-items:flex-start; justify-content:center; opacity:0; transition:opacity .35s ease; }
+  .welcome.show { display:flex; }
+  .welcome.in { opacity:1; }
+  @media (orientation:landscape) { .welcome { justify-content:flex-start; padding-left:max(6vw, 24px); } .wcard { margin-block:auto; } }
+  @media (max-width:420px) { .wcard { padding:24px 20px 18px; } .wlead { font-size:15px; } }
+  @media (orientation:portrait) { .welcome { padding-top:calc(9vh + env(safe-area-inset-top)); } }
+  .wcard { width:min(420px, 100%); background:rgba(255,255,255,.78); -webkit-backdrop-filter:blur(22px) saturate(1.4); backdrop-filter:blur(22px) saturate(1.4);
+    border:1px solid rgba(255,255,255,.7); border-radius:26px; padding:28px 26px 22px; color:#10231f;
+    box-shadow:0 20px 50px rgba(16,60,52,.18), 0 2px 6px rgba(16,60,52,.08); transform:translateY(8px); transition:transform .45s ease; }
+  .welcome.in .wcard { transform:none; }
+  @media (prefers-reduced-motion:reduce) { .welcome, .wcard { transition:none; } }
+  .wbrand { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .wbrand img { width:46px; height:46px; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,.12); }
+  .wbrand h1 { margin:0; font-size:28px; font-weight:700; letter-spacing:-.4px; }
+  .wbrand p { margin:0; font-size:14px; color:#4a6660; }
+  .wlead { font-size:16px; line-height:1.45; margin:0 0 16px; color:#1c3a34; }
+  .wtabs { display:flex; background:rgba(16,35,31,.07); border-radius:12px; padding:3px; margin-bottom:14px; }
+  .wtabs button { flex:1; border:none; background:none; padding:9px 0; border-radius:10px; font-size:15px; color:#2b4a44; cursor:pointer; }
+  .wtabs button.on { background:#fff; color:#10231f; font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.12); }
+  .wcard label { display:block; font-size:13px; font-weight:600; color:#3b5a53; margin:10px 0 5px; text-transform:none; letter-spacing:0; }
+  .wcard input { width:100%; font-size:16px; padding:13px 14px; border-radius:12px; border:1px solid rgba(16,35,31,.16); background:rgba(255,255,255,.92); color:#10231f; }
+  .wcard input:focus { outline:2px solid #1f6f62; outline-offset:1px; border-color:transparent; }
+  .wgo { width:100%; margin-top:16px; border:none; border-radius:13px; padding:14px; font-size:17px; font-weight:600; color:#fff; background:#14463d; cursor:pointer; }
+  .wgo:disabled { opacity:.6; }
+  .wmsg { display:none; margin-top:12px; padding:10px 12px; border-radius:10px; background:#fdecea; color:#8a2a1c; font-size:14px; line-height:1.4; }
+  .wnote { display:flex; gap:10px; align-items:flex-start; margin-top:16px; padding:12px; border-radius:12px; background:rgba(20,70,61,.07); font-size:13.5px; line-height:1.45; color:#2b4a44; }
+  .wnote b { color:#10231f; }
+  .wskip { width:100%; margin-top:14px; border:none; background:none; color:#14463d; font-size:15px; font-weight:600; padding:10px; cursor:pointer; }
+  .wskipnote { text-align:center; font-size:12.5px; color:#4a6660; margin:0; line-height:1.4; }
+  @media (prefers-color-scheme: dark) {
+    .wcard { background:rgba(24,30,29,.74); border-color:rgba(255,255,255,.12); color:#eef5f3; }
+    .wbrand p, .wskipnote { color:#a9bfba; } .wlead { color:#dbe8e5; }
+    .wtabs { background:rgba(255,255,255,.08); } .wtabs button { color:#c7d8d4; } .wtabs button.on { background:#3a4644; color:#fff; }
+    .wcard label { color:#b9ccc8; } .wcard input { background:rgba(0,0,0,.35); color:#fff; border-color:rgba(255,255,255,.15); }
+    .wgo { background:#2f8f7d; } .wnote { background:rgba(255,255,255,.07); color:#c7d8d4; } .wnote b { color:#fff; } .wskip { color:#7fd6c4; }
+  }
   .toast { position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(200%);
     background:#222; color:#fff; border-radius:12px; padding:10px 14px; display:flex; gap:14px; align-items:center;
     z-index:30; transition:transform .2s ease; max-width:92vw; font-size:15px; box-shadow:0 4px 20px rgba(0,0,0,.3); }
@@ -267,6 +308,20 @@
     <button class="btn-link" id="sheetClose">Done</button>
   </div>
   <div class="sheet-body" id="sheetBody"></div>
+</div>
+<div class="welcome" id="welcome" role="dialog" aria-labelledby="wTitle">
+  <div class="wcard">
+    <div class="wbrand"><img src="icons/icon-192.png" alt=""><div><h1 id="wTitle">Timetable</h1><p>Your places, times and tasks, month by month</p></div></div>
+    <p class="wlead">Create a free account to keep your calendar <b>automatically in sync</b> on your iPhone, iPad and any other device you sign in on.</p>
+    <div class="wtabs"><button id="wTabUp" class="on">Create account</button><button id="wTabIn">Sign in</button></div>
+    <label for="wEmail">Email</label><input type="email" id="wEmail" autocomplete="username" inputmode="email" placeholder="you@example.com">
+    <label for="wPw">Password</label><input type="password" id="wPw" autocomplete="new-password" placeholder="At least 6 characters">
+    <div class="wmsg" id="wMsg"></div>
+    <button class="wgo" id="wGo">Create account</button>
+    <div class="wnote"><span aria-hidden="true">🔒</span><span>Your email is only used as your sign-in name. <b>The app can't read your emails or access anything in your email account</b>, and only you can see your timetable.</span></div>
+    <button class="wskip" id="wSkip">Continue without an account</button>
+    <p class="wskipnote">Your calendar will be saved only on this device. You can sign in later from 🎨.</p>
+  </div>
 </div>
 <div class="toast" id="toast"><span id="toastMsg"></span><button id="toastBtn">Undo</button></div>
 
@@ -1633,6 +1688,43 @@ function supaInit() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) supaPull(); });
   window.addEventListener('online', supaPull);
 }
+
+/* ================= Welcome page (first open of the installed app) ================= */
+function showWelcome() {
+  const w = document.getElementById('welcome'); if (!w) return;
+  let mode = 'up';
+  const tabUp = document.getElementById('wTabUp'), tabIn = document.getElementById('wTabIn'), go = document.getElementById('wGo'),
+        pw = document.getElementById('wPw'), msgEl = document.getElementById('wMsg');
+  const msg = t => { msgEl.style.display = t ? 'block' : 'none'; msgEl.textContent = t || ''; };
+  const setMode = m => { mode = m; tabUp.classList.toggle('on', m === 'up'); tabIn.classList.toggle('on', m === 'in');
+    go.textContent = m === 'up' ? 'Create account' : 'Sign in'; pw.autocomplete = m === 'up' ? 'new-password' : 'current-password'; msg(''); };
+  tabUp.onclick = () => setMode('up'); tabIn.onclick = () => setMode('in');
+  const close = () => { w.classList.remove('in'); setTimeout(() => w.classList.remove('show'), 350); };
+  go.onclick = async () => {
+    const email = document.getElementById('wEmail').value.trim(), password = pw.value;
+    if (!/^\S+@\S+\.\S+$/.test(email)) return msg('Please type a valid email address.');
+    if (password.length < 6) return msg('Your password needs at least 6 characters.');
+    go.disabled = true; go.textContent = mode === 'up' ? 'Creating account…' : 'Signing in…'; msg('');
+    try {
+      if (mode === 'up') {
+        const j = await supaAuth('signup', { email, password });
+        if (!keepSession(j)) { go.disabled = false; setMode('in'); return msg('Account created. Check your email for a confirmation link, then sign in here.'); }
+      } else keepSession(await supaAuth('token?grant_type=password', { email, password }));
+      try { localStorage.setItem('tt-welcome', 'done'); } catch (e) {}
+      close(); toast(mode === 'up' ? 'Welcome! Your calendar now syncs ☁︎' : 'Signed in · syncing ☁︎'); supaInit();
+    } catch (e) {
+      go.disabled = false; go.textContent = mode === 'up' ? 'Create account' : 'Sign in';
+      const t = e.message || '';
+      msg(/invalid login/i.test(t) ? 'Wrong email or password. New here? Tap "Create account".'
+        : /already registered|already exists/i.test(t) ? 'This email already has an account. Tap "Sign in" instead.'
+        : /fetch|network/i.test(t) ? "Couldn't connect. Check your internet and try again." : t);
+    }
+  };
+  [document.getElementById('wEmail'), pw].forEach(i => i.addEventListener('keydown', ev => { if (ev.key === 'Enter') go.click(); }));
+  document.getElementById('wSkip').onclick = () => { try { localStorage.setItem('tt-welcome', 'skip'); } catch (e) {} close(); };
+  w.classList.add('show'); requestAnimationFrame(() => requestAnimationFrame(() => w.classList.add('in')));
+}
+
 function openAccount() {
   if (supa.session) {
     showSheet('Account', `<div class="box">Signed in as <b>${esc(supa.session.user.email)}</b><div class="meta">Your timetable syncs between every device where you sign in with this email.</div></div>
@@ -1694,7 +1786,11 @@ document.getElementById('undoBtn').onclick = undo;
 document.getElementById('redoBtn').onclick = redo;
 render();
 initCloud();
-if (!window.claude) supaInit();
+if (!window.claude) {
+  supaInit();
+  let seen = null; try { seen = localStorage.getItem('tt-welcome'); } catch (e) {}
+  if (supaOn() && !supa.session && !seen) showWelcome();
+}
 // Offline mode for the installed app (GitHub Pages)
 try { if ('serviceWorker' in navigator && location.protocol === 'https:' && /github\.io$/.test(location.hostname)) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
 let lastDay = todayIso();
