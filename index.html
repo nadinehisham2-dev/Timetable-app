@@ -34,6 +34,7 @@
   .btn-link { background:none; border:none; color:var(--accent); font-size:17px; padding:6px 8px; cursor:pointer; }
   .icon-btn { background:none; border:none; color:var(--accent); font-size:20px; padding:4px 8px; cursor:pointer; line-height:1; }
   .spacer { flex:1; }
+  @media (max-width:440px) { .row2 { gap:2px; } .icon-btn { padding:4px 5px; font-size:19px; } .seg button { padding:5px 9px; } }
   .info { font-size:12px; color:var(--muted); white-space:nowrap; }
   .info .np { color:var(--prayer); font-weight:600; }
   .chips { display:flex; gap:6px; overflow-x:auto; padding:8px 0 4px; scrollbar-width:none; }
@@ -59,7 +60,7 @@
   .cell.we .num { color:var(--muted); }
   .cell.today .num { background:var(--accent); color:#fff; }
   .items { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
-    scrollbar-width:thin; text-align:center; font-size:clamp(8px,1.35vw,13px); line-height:1.3; }
+    scrollbar-width:thin; text-align:center; font-size:calc(clamp(8px,1.35vw,13px) * var(--ts,1)); line-height:1.3; }
   .items .pl { font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .items .sec { padding:2px 0; }
   .items .sec + .sec { border-top:1px solid var(--line); margin-top:2px; padding-top:3px; }
@@ -84,7 +85,7 @@
     background-image:linear-gradient(var(--line) 1px, transparent 1px); background-size:100% var(--h); }
   .wk-col.we { background-color:var(--weekend); }
   .blk { position:absolute; left:2px; right:2px; border-radius:6px; padding:2px 4px; font-size:10px; line-height:1.25;
-    overflow:hidden; cursor:pointer; color:#fff; z-index:1; }
+    overflow:hidden; cursor:pointer; color:#fff; z-index:1; font-size:calc(10px * var(--ts,1)); }
   .blk .tm { font-size:.9em; display:block; }
   .blk { box-shadow:0 0 0 1px var(--bg); }
   .blk.alt { filter:brightness(.82) saturate(1.1); }
@@ -161,6 +162,12 @@
   #sPlaces button.on { background:var(--c); color:#fff; border-style:solid; border-color:var(--c); }
   .preview { background:var(--soft); border-radius:12px; padding:12px; font:13px/1.45 -apple-system, system-ui, sans-serif; white-space:pre-wrap; max-height:220px; overflow:auto; margin:0 0 10px; }
   .warnbox { border:1.5px solid var(--accent); }
+  .todaybar { display:flex; gap:6px; overflow-x:auto; padding:8px 0 2px; scrollbar-width:none; }
+  .todaybar::-webkit-scrollbar { display:none; }
+  .tb { flex:none; border:none; background:var(--soft); color:var(--text); border-radius:12px; padding:6px 11px; font-size:13px; cursor:pointer; white-space:nowrap; }
+  .tb small { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.3px; }
+  .tb .np { color:var(--prayer); }
+  .tb.qa { background:var(--accent); color:#fff; font-weight:600; }
   .res { padding:10px 0; border-bottom:1px solid var(--line); cursor:pointer; }
   .res small { color:var(--muted); display:block; }
 
@@ -188,8 +195,9 @@
     <button class="icon-btn" id="remBtn" aria-label="Reminders">🔔</button>
     <button class="icon-btn" id="setBtn" aria-label="Places and settings">🎨</button>
   </div>
+  <div class="todaybar" id="todayBar"></div>
   <div class="row2" style="margin-top:2px">
-    <span class="info" id="nextPrayer"></span><span class="spacer"></span><button class="badge" id="todoBadge" style="display:none"></button><span class="info" id="sync">Saved on this device</span>
+    <span class="spacer"></span><button class="badge" id="todoBadge" style="display:none"></button><span class="info" id="sync">Saved on this device</span>
   </div>
   <div class="chips" id="chips"></div>
 </header>
@@ -221,6 +229,7 @@ function normalize(d) {
     skip:[], extra:[], done:{}, drop:{}, ...e }));
   d.places.forEach(p => { if (p.remind === undefined) p.remind = null; });
   d.prayerRemind = d.prayerRemind || {};
+  d.templates = d.templates || [];
   d.carryFrom = d.carryFrom || todayIsoRaw();
   if (d.carryRepeats === undefined) d.carryRepeats = false;
   d.updated = d.updated || 0;
@@ -230,7 +239,8 @@ const clone = o => JSON.parse(JSON.stringify(o));
 function todayIsoRaw() { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
 let db = (() => { try { return normalize(JSON.parse(localStorage.getItem(KEY))); } catch (e) { return normalize(null); } })();
 let ui = (() => { try { return { mode:'month', filter:[], ...JSON.parse(localStorage.getItem(UIKEY)) }; } catch (e) { return { mode:'month', filter:[] }; } })();
-const saveUI = () => { try { localStorage.setItem(UIKEY, JSON.stringify({ mode:ui.mode, filter:ui.filter })); } catch (e) {} };
+const saveUI = () => { try { localStorage.setItem(UIKEY, JSON.stringify({ mode:ui.mode, filter:ui.filter, ts:ui.ts })); } catch (e) {} };
+const applyTextSize = () => document.documentElement.style.setProperty('--ts', ui.ts || 1);
 function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} }
 function persist() { db.updated = Date.now(); saveLocal(); schedulePush(); }
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -419,11 +429,11 @@ function renderMonth() {
     html += `<div class="cell${we}${date === today ? ' today' : ''}" data-date="${date}"><div class="num">${d}</div><div class="items">${cellItems(date)}</div></div>`;
   }
   main.innerHTML = `<div class="weekdays">${DAYS.map((d, i) => `<div class="${WEEKEND.has(i) ? 'we' : ''}">${d}</div>`).join('')}</div>
-    <div class="grid" id="grid" style="grid-template-rows:repeat(${total / 7}, minmax(74px,1fr))">${html}</div>`;
+    <div class="grid" id="grid" style="grid-template-rows:repeat(${total / 7}, minmax(calc(74px * var(--ts,1)),1fr))">${html}</div>`;
   bindSwipe(document.getElementById('grid'));
 }
 
-const H = 46, START_H = 3;   // px per hour, first hour shown
+let H = 46; const START_H = 3;   // px per hour, first hour shown
 function weekStart() { const d = new Date(cursor); d.setDate(d.getDate() - (d.getDay() + 1) % 7); return isoOf(d); }
 // Put overlapping items side by side: returns id -> {lane, cols}
 function layoutLanes(list) {
@@ -441,6 +451,7 @@ function layoutLanes(list) {
   return out;
 }
 function renderWeek() {
+  H = Math.round(46 * Math.max(1, ui.ts || 1));
   const ws = weekStart(), dates = [...Array(7)].map((_, i) => addDays(ws, i)), today = todayIso();
   const s = parse(ws), e = parse(dates[6]), same = s.getMonth() === e.getMonth();
   document.getElementById('mName').textContent = same ? MONTHS[s.getMonth()] : `${s.getDate()} ${MONTHS[s.getMonth()].slice(0, 3)} – ${e.getDate()} ${MONTHS[e.getMonth()].slice(0, 3)}`;
@@ -515,9 +526,118 @@ function bindSwipe(el) {
     if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) shift(dx < 0 ? 1 : -1);
   });
 }
-function updateNextPrayer() {
+const endMin = e => toMin(e.end) > toMin(e.start) ? toMin(e.end) : toMin(e.start) + 60;
+const inTime = m => m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}`;
+function updateNextPrayer() {   // the "today" bar at the top
+  const now = new Date(), n = now.getHours() * 60 + now.getMinutes(), t = todayIso();
+  const list = entriesFor(t, true).filter(e => e.start);
+  const cur = list.filter(e => toMin(e.start) <= n && n < endMin(e));
+  const nxt = list.find(e => toMin(e.start) > n);
+  const chip = (e, label, extra) => `<button class="tb" data-today="1"><small>${label}</small> <b style="color:${esc(place(e.placeId).color)}">${esc(place(e.placeId).name)}</b> <span class="tm">${extra}</span></button>`;
+  let html = cur.map(e => chip(e, 'Now', e.end ? 'till ' + fmtTime(e.end) : fmtTime(e.start))).join('');
+  if (nxt) html += chip(nxt, 'Next', `${fmtTime(nxt.start)} · in ${inTime(toMin(nxt.start) - n)}`);
+  if (!cur.length && !nxt) html += `<button class="tb" data-today="1"><small>Today</small> ${list.length ? 'done for the day ✓' : 'nothing timed'}</button>`;
   const np = nextPrayer();
-  document.getElementById('nextPrayer').innerHTML = np ? `Next prayer: <span class="np">${np.name} ${fmtTime(np.time)}</span> · Alexandria` : '';
+  if (np) html += `<button class="tb" data-today="1"><small>🕌</small> <b class="np">${np.name}</b> <span class="tm">${fmtTime(np.time)}</span></button>`;
+  html += `<button class="tb qa" id="qaBtn">＋ Quick add</button>`;
+  const bar = document.getElementById('todayBar'); bar.innerHTML = html;
+  bar.querySelectorAll('[data-today]').forEach(b => b.onclick = () => { cursor = parse(t); render(); openDay(t); });
+  document.getElementById('qaBtn').onclick = () => openQuick(sheetDay && sheetMode === 'day' ? sheetDay : t);
+}
+
+/* ================= Quick add ================= */
+const DOW_N = { sat:6, sun:0, mon:1, tue:2, wed:3, thu:4, fri:5 };
+const MON_N = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 };
+const reEsc = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function to24(h, m, suf) { h = +h; m = +(m || 0); if (suf) { suf = suf[0].toLowerCase(); h = h % 12 + (suf === 'p' ? 12 : 0); } return h * 60 + m; }
+function guessHour(h, m) { h = +h; if (h > 12 || h === 0) return h * 60 + +(m || 0); return to24(h, m, h === 12 || h <= 6 ? 'p' : 'a'); }
+function parseQuick(text, base) {
+  let s = ' ' + text + ' ';
+  const o = { date: base, placeId: null, newPlace: '', start: '', end: '', tasks: [], repeat: null, remind: undefined };
+  const take = (re, fn) => { const m = s.match(re); if (m) { s = s.slice(0, m.index) + ' ' + s.slice(m.index + m[0].length); fn(m); } return m; };
+  const hm = v => `${pad(Math.floor(v / 60) % 24)}:${pad(v % 60)}`;
+  take(/\bremind(?:\s*me)?\s*(\d+)\s*(min(?:ute)?s?|m|h(?:ou)?rs?|h|hours?|d(?:ays?)?|w(?:ee)?ks?|w)\b(?:\s*before)?/i,
+    m => { o.remind = +m[1] * { m:1, h:60, d:1440, w:10080 }[m[2][0].toLowerCase()]; });
+  take(/\b(every\s*day|daily)\b/i, () => { o.repeat = { freq:'daily', days:[], until:'' }; });
+  take(/\bmonthly\b/i, () => { o.repeat = { freq:'monthly', days:[], until:'' }; });
+  take(/\bevery\s+((?:(?:sat|sun|mon|tue|wed|thu|fri)[a-z]*(?:\s*(?:,|&|and)\s*|\s+))+)/i, m => {
+    const days = [...m[1].matchAll(/[a-z]+/gi)].map(x => DOW_N[x[0].slice(0, 3).toLowerCase()]).filter(x => x !== undefined);
+    if (days.length) o.repeat = { freq:'weekly', days, until:'' };
+  });
+  let weekly = !!take(/\bweekly\b/i, () => {});
+  take(/\b(today|tonight)\b/i, () => { o.date = todayIso(); });
+  take(/\b(tomorrow|tmrw|tmr)\b/i, () => { o.date = addDays(todayIso(), 1); });
+  take(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/, m => {
+    const y = m[3] ? (m[3].length === 2 ? 2000 + +m[3] : +m[3]) : parse(todayIso()).getFullYear();
+    o.date = isoOf(new Date(y, +m[2] - 1, +m[1]));
+  });
+  const monTxt = '(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*';
+  take(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+${monTxt}\\b`, 'i'), m => { const t = parse(todayIso()); let d = new Date(t.getFullYear(), MON_N[m[2].toLowerCase()], +m[1]); if (isoOf(d) < addDays(todayIso(), -60)) d.setFullYear(d.getFullYear() + 1); o.date = isoOf(d); });
+  take(new RegExp(`\\b${monTxt}\\s+(\\d{1,2})\\b`, 'i'), m => { const t = parse(todayIso()); let d = new Date(t.getFullYear(), MON_N[m[1].toLowerCase()], +m[2]); if (isoOf(d) < addDays(todayIso(), -60)) d.setFullYear(d.getFullYear() + 1); o.date = isoOf(d); });
+  take(/\b(?:on\s+)?(next\s+)?(sat|sun|mon|tue|wed|thu|fri)[a-z]*\b/i, m => {
+    const want = DOW_N[m[2].toLowerCase()]; let d = todayIso(); while (parse(d).getDay() !== want) d = addDays(d, 1);
+    if (m[1]) { const t = parse(todayIso()); t.setDate(t.getDate() - (t.getDay() + 1) % 7); const nextWk = addDays(isoOf(t), 7); while (d < nextWk) d = addDays(d, 7); }
+    o.date = d;
+  });
+  const T = '(\\d{1,2})(?:[:.](\\d{2}))?\\s*(am|pm|a\\.?m\\.?|p\\.?m\\.?)?';
+  const rng = take(new RegExp(`(?:\\bfrom\\s+)?\\b${T}\\s*(?:-|–|to|till|until)\\s*${T}(?![\\d/])`, 'i'), m => {
+    let [, h1, m1, s1, h2, m2, s2] = m, a, b;
+    if (s2) { b = to24(h2, m2, s2); a = s1 ? to24(h1, m1, s1) : [to24(h1, m1, 'a'), to24(h1, m1, 'p')].filter(v => v < b).pop() ?? to24(h1, m1, 'a'); }
+    else if (s1) { a = to24(h1, m1, s1); b = [to24(h2, m2, 'a'), to24(h2, m2, 'p')].find(v => v > a) ?? to24(h2, m2, 'p'); }
+    else { a = guessHour(h1, m1); b = +h2 > 12 ? to24(h2, m2) : [to24(h2, m2, 'a'), to24(h2, m2, 'p')].find(v => v > a) ?? to24(h2, m2, 'p'); }
+    o.start = hm(a); o.end = hm(b);
+  });
+  if (!rng) take(new RegExp(`(?:\\bat\\s+${T}|\\b(\\d{1,2})(?:[:.](\\d{2}))?\\s*(am|pm)\\b|\\b(\\d{1,2}):(\\d{2})\\b)`, 'i'), m => {
+    if (m[1]) o.start = hm(m[3] ? to24(m[1], m[2], m[3]) : guessHour(m[1], m[2]));
+    else if (m[4]) o.start = hm(to24(m[4], m[5], m[6]));
+    else o.start = hm(+m[7] > 12 ? to24(m[7], m[8]) : guessHour(m[7], m[8]));
+  });
+  if (weekly && !o.repeat) o.repeat = { freq:'weekly', days:[parse(o.date).getDay()], until:'' };
+  const byLen = [...db.places].sort((a, b) => b.name.length - a.name.length);
+  for (const p of byLen) { if (take(new RegExp(`(^|[\\s,])${reEsc(p.name)}(?=[\\s,]|$)`, 'i'), () => {})) { o.placeId = p.id; break; } }
+  s = s.replace(/\b(at|on|from|in)\b/gi, ' ').replace(/\s+/g, ' ').trim().replace(/^[,;\-–\s]+|[,;\-–\s]+$/g, '');
+  if (!o.placeId && s) { const w = s.match(/^[^\s,;]+/)[0]; o.newPlace = w; s = s.slice(w.length).trim().replace(/^[,;\-–\s]+/, ''); }
+  o.tasks = s ? s.split(/\s*(?:,|;|\s-\s|\+)\s*/).map(x => x.replace(/^-+|-+$/g, '').trim()).filter(Boolean) : [];
+  if (o.remind === undefined) o.remind = o.placeId ? place(o.placeId).remind : null;
+  return o;
+}
+function openQuick(base) {
+  showSheet('Quick add', `
+    <input type="text" id="qaText" placeholder="e.g. PUA tomorrow 8:30-2 pt diagnosis, scaling" autocomplete="off" enterkeyhint="done">
+    <div class="meta" style="margin-top:6px">Write place, day, time and tasks in any order. Separate tasks with commas.<br>
+      Examples: <i>Mounir sat 2-7pm pt nermin cbct</i> · <i>Yoga every tue 9pm</i> · <i>Clinic 12/12 10am remind 1h</i></div>
+    <div class="box" id="qaPrev" style="display:none"></div>
+    <div style="height:12px"></div>
+    <div class="two"><button class="secondary" id="qaEdit" style="margin-top:0" disabled>Edit details</button><button class="primary" id="qaAdd" disabled>Add</button></div>`,
+    sheetMode === 'day' ? () => openDay(base) : null, 'other');
+  const inp = document.getElementById('qaText'), prev = document.getElementById('qaPrev'), add = document.getElementById('qaAdd'), ed = document.getElementById('qaEdit');
+  let cur = null;
+  const upd = () => {
+    const v = inp.value.trim();
+    cur = v ? parseQuick(v, base) : null;
+    add.disabled = ed.disabled = !cur || (!cur.placeId && !cur.newPlace);
+    if (!cur) { prev.style.display = 'none'; return; }
+    const p = cur.placeId ? place(cur.placeId) : null;
+    prev.style.display = '';
+    prev.innerHTML = `<b style="color:${p ? esc(p.color) : 'inherit'}">${p ? esc(p.name) : cur.newPlace ? esc(cur.newPlace) + ' <small class="meta">(new place)</small>' : '<span class="warn">Which place?</span>'}</b>
+      <span class="tm">${fmtRange(cur.start, cur.end) || 'no time'}</span><br>📅 ${longDate(cur.date)}
+      ${cur.repeat ? `<br>↻ ${repeatText(cur.repeat)}` : ''}${cur.remind != null ? `<br>🔔 ${remindLabel(cur.remind)}` : ''}
+      ${cur.tasks.length ? '<br>' + cur.tasks.map(t => '– ' + esc(t)).join('<br>') : ''}`;
+  };
+  inp.oninput = upd;
+  const build = () => {
+    let pid = cur.placeId;
+    if (!pid) { const cols = ['#e0533d','#f29d38','#2a9d8f','#e76fa3','#5a6acf','#8a5a2b','#3aa0d8']; const p = { id:uid(), name:cur.newPlace, color:cols[db.places.length % cols.length], remind:null }; db.places.push(p); pid = p.id; }
+    return { id:uid(), date:cur.date, placeId:pid, start:cur.start, end:cur.end, tasks:cur.tasks, note:'', remind:cur.remind, repeat:cur.repeat, skip:[], extra:[], done:{}, drop:{} };
+  };
+  add.onclick = () => {
+    if (!cur) return;
+    const item = build(), clash = item.start ? findClashes(item.date, item, null) : [];
+    withUndo(`Added to ${shortDate(item.date)}${clash.length ? ' · ⚠️ overlaps ' + place(clash[0].placeId).name : ''}`, () => db.entries.push(item), () => openDay(item.date));
+  };
+  ed.onclick = () => { if (!cur) return; const item = build(); db.entries.push(item); persist(); render(); openEditor(item.date, item.id); };
+  inp.addEventListener('keydown', ev => { if (ev.key === 'Enter' && !add.disabled) add.click(); });
+  setTimeout(() => inp.focus(), 250);
 }
 
 /* ================= Sheet + toast ================= */
@@ -569,7 +689,8 @@ function openDay(date) {
     </div>`;
   });
   if (date === todayIso()) { const n = unfinished().length; if (n) html += `<button class="secondary" id="openTodo" style="margin:0 0 10px">↺ ${n} unfinished task${n > 1 ? 's' : ''} from earlier days</button>`; }
-  html += `<button class="primary" id="addEntry">+ Add</button>`;
+  html += `<div class="two"><button class="primary" id="addEntry">+ Add</button><button class="secondary" id="dayQuick" style="margin-top:0">⚡ Quick add</button></div>
+    <div class="two"><button class="secondary" id="tplApply">📋 Use a template</button><button class="secondary" id="tplSave" ${list.length ? '' : 'disabled style="opacity:.4"'}>Save day as template</button></div>`;
   const missing = db.entries.filter(e => e.repeat && !occurs(e, date));
   if (missing.length) html += `<div class="lbl">Add a repeating item to this day only</div><div class="quick">` +
     missing.map(e => `<button data-q="${e.id}" style="color:${esc(place(e.placeId).color)}">+ ${esc(place(e.placeId).name)} ${fmtRange(e.start, e.end)}</button>`).join('') + '</div>';
@@ -591,6 +712,9 @@ function openDay(date) {
     }, () => openDay(date));
   });
   document.getElementById('addEntry').onclick = () => openEditor(date);
+  document.getElementById('dayQuick').onclick = () => openQuick(date);
+  document.getElementById('tplApply').onclick = () => openTemplates(date);
+  if (list.length) document.getElementById('tplSave').onclick = () => saveTemplate(date);
   const ot = document.getElementById('openTodo'); if (ot) ot.onclick = openTodo;
 }
 
@@ -707,13 +831,7 @@ function openEditor(date, id) {
     if (!orig) {
       withUndo('Added', () => db.entries.push({ ...e, ...data, id:uid(), date }), () => openDay(date));
     } else if (orig.repeat) {
-      ask('Save changes', 'This is a repeating item. Apply your changes to:', [
-        { label:`This day only (${shortDate(date)})`, cls:'primary', fn:() => withUndo('Changed for this day', () => {
-            orig.extra = orig.extra.filter(d => d !== date); orig.skip.push(date);
-            db.entries.push({ ...data, repeat:null, id:uid(), date, skip:[], extra:[], done: orig.done[date] ? { [date]: orig.done[date] } : {} });
-          }, () => openDay(date)) },
-        { label:'All days in the series', fn:() => withUndo('Series updated', () => Object.assign(orig, data, { date: data.repeat ? orig.date : date }), () => openDay(date)) },
-      ], () => openEditor(date, id));
+      seriesScope('edit', orig, date, data);
     } else {
       withUndo('Saved', () => Object.assign(orig, data, { date }), () => openDay(date));
     }
@@ -721,12 +839,7 @@ function openEditor(date, id) {
 
   if (!orig) return;
   document.getElementById('fDelete').onclick = () => {
-    if (orig.repeat) ask('Delete', `Remove <b>${esc(place(orig.placeId).name)}</b> from:`, [
-      { label:`This day only (${shortDate(date)})`, cls:'primary', fn:() => withUndo('Removed from this day', () => {
-          orig.extra = orig.extra.filter(d => d !== date); if (occurs(orig, date)) orig.skip.push(date);
-        }, () => openDay(date)) },
-      { label:'Every day (delete the whole series)', cls:'danger', fn:() => withUndo('Series deleted', () => { db.entries = db.entries.filter(x => x !== orig); }, () => openDay(date)) },
-    ], () => openEditor(date, id));
+    if (orig.repeat) seriesScope('delete', orig, date, null);
     else ask('Delete', `Delete <b>${esc(place(orig.placeId).name)} ${fmtRange(orig.start, orig.end)}</b> on ${shortDate(date)}?`, [
       { label:'Delete', cls:'danger', fn:() => withUndo('Deleted', () => { db.entries = db.entries.filter(x => x !== orig); }, () => openDay(date)) },
       { label:'Cancel', fn:() => openEditor(date, id) },
@@ -734,6 +847,61 @@ function openEditor(date, id) {
   };
   document.getElementById('fCopy').onclick = () => openTransfer(date, orig, 'copy');
   document.getElementById('fMove').onclick = () => openTransfer(date, orig, 'move');
+}
+
+/* ===== Repeating items: choose which dates a change applies to ===== */
+// Replace a series with pieces: [start..from-1] unchanged, [from..to] changed (or removed), [to+1..end] unchanged
+function splitSeries(orig, from, to, data) {
+  const b = clone(orig), bu = b.repeat.until || '';
+  const within = (d, st, u) => d >= st && (!u || d <= u);
+  const pick = (o, st, u) => Object.fromEntries(Object.entries(o || {}).filter(([d]) => within(d, st, u)));
+  const make = (st, u, src) => ({ ...clone(b), ...clone(src), id:uid(), date:st,
+    repeat: src.repeat ? { ...src.repeat, until: u || '' } : null,
+    skip: b.skip.filter(d => within(d, st, u)), extra: b.extra.filter(d => within(d, st, u)),
+    done: pick(b.done, st, u), drop: pick(b.drop, st, u) });
+  const out = [];
+  if (from > b.date) out.push(make(b.date, addDays(from, -1), b));
+  if (data) {
+    if (!data.repeat) out.push({ ...make(from, from, { ...b, ...data, repeat:null }), skip:[], extra:[] });
+    else out.push(make(from, to || data.repeat.until || bu, { ...b, ...data }));
+  }
+  if (to && (!bu || to < bu)) out.push(make(addDays(to, 1), bu, b));
+  const idx = db.entries.indexOf(orig);
+  db.entries.splice(idx, 1, ...out.filter(e => !e.repeat || !e.repeat.until || e.repeat.until >= e.date));
+}
+function seriesScope(kind, orig, date, data) {
+  const del = kind === 'delete', name = esc(place(orig.placeId).name);
+  const back = () => openEditor(date, orig.id), done = () => openDay(date);
+  const dayOnly = () => withUndo(del ? 'Removed from this day' : 'Changed for this day', () => {
+    orig.extra = orig.extra.filter(d => d !== date);
+    if (occurs(orig, date)) orig.skip.push(date);
+    if (!del) db.entries.push({ ...clone(orig), ...data, repeat:null, id:uid(), date, skip:[], extra:[],
+      done: orig.done[date] ? { [date]: orig.done[date] } : {}, drop:{} });
+  }, done);
+  const range = (from, to) => withUndo(`${del ? 'Removed' : 'Changed'} ${to ? `${shortDate(from)} – ${shortDate(to)}` : `from ${shortDate(from)} on`}`,
+    () => splitSeries(orig, from, to, del ? null : data), done);
+  const pickDates = () => {
+    showSheet('Choose dates', `<div class="meta">${del ? 'Remove' : 'Change'} <b>${name}</b> only between these dates. Days outside stay as they are.</div>
+      <div class="row"><div><label>From</label><input type="date" id="rgFrom" value="${date}"></div>
+      <div><label>To</label><input type="date" id="rgTo"></div></div>
+      <div class="meta">Leave "To" empty for "from this date onwards".</div>
+      <div style="height:14px"></div><button class="primary" id="rgGo">${del ? 'Remove' : 'Apply'}</button>`, () => seriesScope(kind, orig, date, data), 'other');
+    document.getElementById('rgGo').onclick = () => {
+      const f = document.getElementById('rgFrom').value, t = document.getElementById('rgTo').value;
+      if (!f) return toast('Choose a start date');
+      if (t && t < f) return toast('"To" must be after "From"');
+      range(f, t || null);
+    };
+  };
+  ask(del ? 'Delete' : 'Save changes', del ? `Remove <b>${name}</b> from:` : 'This is a repeating item. Apply your changes to:', [
+    { label:`This day only (${shortDate(date)})`, cls:'secondary', fn:dayOnly },
+    { label:`This day and the days after it`, cls:'primary', fn:() => range(date, null) },
+    { label:'Choose dates…', fn:pickDates },
+    { label: del ? 'Every day, past included (delete all)' : 'All days, past included', cls: del ? 'danger' : 'secondary',
+      fn:() => del ? withUndo('Series deleted', () => { db.entries = db.entries.filter(x => x !== orig); }, done)
+                   : withUndo('Series updated', () => Object.assign(orig, data, { date: data.repeat ? orig.date : date }), done) },
+  ], back);
+  body.insertAdjacentHTML('beforeend', `<div class="meta" style="margin-top:10px">Days before the ones you pick stay exactly as they were.</div>`);
 }
 
 function findClashes(date, item, except) {
@@ -776,6 +944,32 @@ function openTransfer(from, e, kind) {
       }
     }, () => openDay(kind === 'move' ? to : from));
   };
+}
+
+/* ================= Templates ================= */
+function saveTemplate(date) {
+  const items = entriesFor(date, true);
+  showSheet('Save as template', `<div class="box">${items.map(e => `<b style="color:${esc(place(e.placeId).color)}">${esc(place(e.placeId).name)}</b> <span class="tm">${fmtRange(e.start, e.end)}</span>${e.tasks.length ? ' · ' + e.tasks.map(esc).join(', ') : ''}`).join('<br>')}</div>
+    <label>Template name</label><input type="text" id="tplName" placeholder="e.g. Clinic day">
+    <label class="chk"><input type="checkbox" id="tplTasks" checked><span>Include tasks</span></label>
+    <div style="height:12px"></div><button class="primary" id="tplGo">Save template</button>`, () => openDay(date), 'other');
+  document.getElementById('tplGo').onclick = () => {
+    const name = document.getElementById('tplName').value.trim(); if (!name) return toast('Give the template a name');
+    const withTasks = document.getElementById('tplTasks').checked;
+    withUndo(`Template "${name}" saved`, () => db.templates.push({ id:uid(), name,
+      items: items.map(e => ({ placeId:e.placeId, start:e.start, end:e.end, tasks: withTasks ? [...e.tasks] : [], note:e.note, remind:e.remind })) }), () => openDay(date));
+  };
+}
+function openTemplates(date) {
+  const t = db.templates;
+  showSheet('Use a template', (t.length ? t.map(tp => `<div class="res" data-t="${tp.id}"><b>${esc(tp.name)}</b><small>${tp.items.map(i => esc(place(i.placeId).name) + (i.start ? ' ' + fmtRange(i.start, i.end) : '')).join(' · ')}</small></div>`).join('')
+    : '<div class="empty-msg">No templates yet. Plan a day, then tap "Save day as template".</div>') +
+    `<div class="meta" style="margin-top:10px">The items are added to ${shortDate(date)} as normal items, so you can still edit or delete each one. Changing the day never changes the template.</div>`, () => openDay(date), 'other');
+  body.querySelectorAll('[data-t]').forEach(el => el.onclick = () => {
+    const tp = db.templates.find(x => x.id === el.dataset.t);
+    const clash = tp.items.some(i => i.start && findClashes(date, i, null).length);
+    withUndo(`"${tp.name}" added to ${shortDate(date)}${clash ? ' · ⚠️ some items overlap' : ''}`, () => tp.items.forEach(i => db.entries.push({ ...clone(i), id:uid(), date, repeat:null, skip:[], extra:[], done:{}, drop:{} })), () => openDay(date));
+  });
 }
 
 /* ================= Unfinished tasks ================= */
@@ -955,7 +1149,7 @@ function openReminders() {
     <div class="two" style="margin-top:8px"><button class="secondary" id="prAll">Copy Fajr's setting to all</button><button class="primary" id="prSave" style="margin-top:8px">Save prayer reminders</button></div>
 
     <div class="lbl" style="margin-top:24px">Get alerts when the app is closed</div>
-    ${downloadsCap ? `<div class="box">Reminders pop up here while the app is open. Calendar files can't be saved from inside Claude, so to get alerts when the app is closed, ask Claude in chat: <i>"add my reminders for next week to my calendar"</i>.</div>` : `<div class="box">Reminders pop up here while the app is open. To be alerted when it's closed, add them to your iPhone/iPad Calendar, and repeat after big changes.</div>
+    ${downloadsCap ? `<div class="box">Reminders pop up here while the app is open. Calendar files can't be saved from inside Claude, so to get alerts when the app is closed, use 📤 Share → Copy text, paste it into a chat with Claude and ask: <i>"add these to my calendar with reminders"</i>.</div>` : `<div class="box">Reminders pop up here while the app is open. To be alerted when it's closed, add them to your iPhone/iPad Calendar, and repeat after big changes.</div>
     <label>Which places</label><select id="xPlace">${placeOpts}<option value="none">None (prayers only)</option></select>
     <label class="chk" style="text-transform:none;letter-spacing:0;font-size:15px;color:inherit"><input type="checkbox" id="xPrayers" ${Object.values(db.prayerRemind).some(v => v != null) ? 'checked' : ''}> Include prayer reminders</label>
     <button class="secondary" id="rExport">📅 Add next 3 months to Calendar</button>`}
@@ -1071,6 +1265,10 @@ function openSettings() {
     <div id="pl">${rows}</div>
     <button class="add-small" id="plAdd" style="margin-top:8px">+ Add place</button>
     <div style="height:12px"></div><button class="primary" id="plSave">Save</button>
+    <div class="lbl" style="margin-top:24px">Text size in the calendar</div>
+    <div class="seg" id="tsSeg" style="width:100%">${[[0.85,'Small'],[1,'Medium'],[1.2,'Large'],[1.45,'Extra large']].map(([v, l]) => `<button data-ts="${v}" class="${(ui.ts || 1) == v ? 'on' : ''}" style="flex:1">${l}</button>`).join('')}</div>
+    <div class="lbl" style="margin-top:24px">Templates</div>
+    <div id="tplList">${db.templates.length ? db.templates.map(t => `<div class="todo"><span style="flex:1;padding:10px 0">${esc(t.name)} <small class="meta">· ${t.items.length} item${t.items.length > 1 ? 's' : ''}</small></span><button class="mini x" data-del="${t.id}" aria-label="Delete">✕</button></div>`).join('') : '<div class="meta">None yet. Save one from any day.</div>'}</div>
     <div class="lbl" style="margin-top:24px">Backup</div>
     <div class="two"><button class="secondary" id="exp">Download backup</button><button class="secondary" id="imp">Restore backup</button></div>
     <input type="file" id="impFile" accept="application/json,.json" style="display:none">
@@ -1089,6 +1287,8 @@ function openSettings() {
     pl.insertAdjacentHTML('beforeend', `<div class="place-row" data-id=""><input type="color" value="#3aa0d8"><input type="text" placeholder="Place name"><button aria-label="Delete">−</button></div>`);
     const r = pl.lastElementChild; wire(r); r.querySelector('input[type=text]').focus();
   };
+  document.getElementById('tsSeg').onclick = ev => { const b = ev.target.closest('button'); if (!b) return; ui.ts = +b.dataset.ts; saveUI(); applyTextSize(); document.querySelectorAll('#tsSeg button').forEach(x => x.classList.toggle('on', x === b)); render(); };
+  document.querySelectorAll('#tplList [data-del]').forEach(b => b.onclick = () => withUndo('Template deleted', () => { db.templates = db.templates.filter(t => t.id !== b.dataset.del); }, openSettings));
   document.getElementById('plSave').onclick = () => {
     const places = [...pl.querySelectorAll('.place-row')].map(r => {
       const old = db.places.find(p => p.id === r.dataset.id);
@@ -1157,6 +1357,7 @@ async function initCloud() {
 }
 
 /* ================= Start ================= */
+applyTextSize();
 render();
 initCloud();
 let lastDay = todayIso();
