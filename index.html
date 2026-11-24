@@ -52,8 +52,9 @@
   .spacer { flex:1; }
   #today { white-space:nowrap; display:inline-flex; align-items:baseline; gap:4px; padding:6px 4px 6px 6px; }
   .tdate { font-size:12px; font-weight:600; color:var(--muted); white-space:nowrap; }
-  @media (max-width:440px) { .title { font-size:22px; } #today { font-size:16px; } .hist { padding:4px 3px; } .hist svg { width:20px; height:20px; } }
+  @media (max-width:440px) { .row1 { gap:4px; } .title { font-size:19.5px; } #today { font-size:16px; padding-left:2px; padding-right:0; } .hist { padding:3px 1px; } .hist svg { width:19px; height:19px; } }
   .hist { padding:4px 6px; display:inline-flex; align-items:center; }
+  .helpb { color:var(--accent); }
   .hist:disabled { opacity:.35; color:var(--muted); cursor:default; }
   /* Phone turned sideways (short screen): let the whole page scroll, taller day boxes */
   @media (max-height:500px) {
@@ -289,6 +290,23 @@
     .wcard label { color:#b9ccc8; } .wcard input { background:rgba(0,0,0,.35); color:#fff; border-color:rgba(255,255,255,.15); }
     .wgo { background:#2f8f7d; } .wnote { background:rgba(255,255,255,.07); color:#c7d8d4; } .wnote b { color:#fff; } .wskip { color:#7fd6c4; }
   }
+  .wforgot { background:none; border:none; color:#14463d; font-size:14px; font-weight:600; padding:8px 0 0; cursor:pointer; }
+  .wmsg.ok { background:#e3f4ee; color:#14463d; }
+  @media (prefers-color-scheme: dark) { .wforgot { color:#7fd6c4; } .wmsg.ok { background:rgba(127,214,196,.15); color:#bfeee3; } }
+  .faq details { border-bottom:1px solid var(--line); padding:10px 0; }
+  .faq summary { font-weight:600; cursor:pointer; font-size:15px; }
+  .faq p { margin:8px 0 2px; font-size:14px; line-height:1.5; color:var(--muted); }
+  #tour { position:fixed; inset:0; z-index:80; }
+  #tour.dim { background:rgba(0,0,0,.55); }
+  .tspot { position:absolute; border-radius:14px; box-shadow:0 0 0 9999px rgba(0,0,0,.55); transition:all .3s ease; pointer-events:none; }
+  .tcard { position:absolute; background:var(--sheet); color:var(--text); border-radius:16px; padding:16px 16px 12px; box-shadow:0 12px 40px rgba(0,0,0,.3); transition:top .3s ease, left .3s ease; }
+  .tcard h3 { margin:2px 0 6px; font-size:18px; }
+  .tcard p { margin:0 0 12px; font-size:15px; line-height:1.45; }
+  .tstep { font-size:12px; color:var(--muted); font-weight:600; }
+  .tbtns { display:flex; align-items:center; gap:8px; }
+  .tbtns button { border:none; border-radius:10px; padding:9px 14px; font-size:15px; cursor:pointer; }
+  .tnext { background:var(--accent); color:#fff; font-weight:600; } .tback { background:var(--soft); color:var(--text); } .tskip { background:none; color:var(--muted); padding-left:0 !important; }
+  @media (prefers-reduced-motion:reduce) { .tspot, .tcard { transition:none; } }
   .toast { position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(200%);
     background:#222; color:#fff; border-radius:12px; padding:10px 14px; display:flex; gap:14px; align-items:center;
     z-index:30; transition:transform .2s ease; max-width:92vw; font-size:15px; box-shadow:0 4px 20px rgba(0,0,0,.3); }
@@ -304,6 +322,7 @@
     <div style="display:flex;align-items:center;gap:2px">
       <button class="icon-btn hist" id="undoBtn" aria-label="Undo" title="Undo" disabled><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
       <button class="icon-btn hist" id="redoBtn" aria-label="Redo" title="Redo" disabled><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+      <button class="icon-btn hist helpb" id="helpBtn" aria-label="Help" title="Help"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10" stroke-dasharray="2.6 2.6"/><path d="M9.3 9.2a2.8 2.8 0 0 1 5.4 1c0 1.9-2.7 2.4-2.7 4" stroke-width="2.3"/><circle cx="12" cy="17.4" r="1.15" fill="currentColor" stroke="none"/></svg></button>
       <button class="btn-link" id="today">Today <span class="tdate" id="tDate"></span></button>
     </div>
   </div>
@@ -342,6 +361,7 @@
     <div class="wtabs"><button id="wTabUp" class="on">Create account</button><button id="wTabIn">Sign in</button></div>
     <label for="wEmail">Email</label><input type="email" id="wEmail" autocomplete="username" inputmode="email" placeholder="you@example.com">
     <label for="wPw">Password</label><input type="password" id="wPw" autocomplete="new-password" placeholder="At least 6 characters">
+    <button class="wforgot" id="wForgot" style="display:none">Forgot password?</button>
     <div class="wmsg" id="wMsg"></div>
     <button class="wgo" id="wGo">Create account</button>
     <div class="wnote"><span aria-hidden="true">🔒</span><span>Your email is only used as your sign-in name. <b>The app can't read your emails or access anything in your email account</b>, and only you can see your timetable.</span></div>
@@ -1905,9 +1925,11 @@ function showWelcome() {
         pw = document.getElementById('wPw'), msgEl = document.getElementById('wMsg');
   const msg = t => { msgEl.style.display = t ? 'block' : 'none'; msgEl.textContent = t || ''; };
   const setMode = m => { mode = m; tabUp.classList.toggle('on', m === 'up'); tabIn.classList.toggle('on', m === 'in');
-    go.textContent = m === 'up' ? 'Create account' : 'Sign in'; pw.autocomplete = m === 'up' ? 'new-password' : 'current-password'; msg(''); };
+    go.textContent = m === 'up' ? 'Create account' : 'Sign in'; pw.autocomplete = m === 'up' ? 'new-password' : 'current-password'; msg('');
+    document.getElementById('wForgot').style.display = m === 'in' ? '' : 'none'; };
+  document.getElementById('wForgot').onclick = () => sendReset(document.getElementById('wEmail').value.trim(), t => { msgEl.style.display = 'block'; msgEl.className = 'wmsg ok'; msgEl.textContent = t; }, t => { msgEl.className = 'wmsg'; msg(t); });
   tabUp.onclick = () => setMode('up'); tabIn.onclick = () => setMode('in');
-  const close = () => { w.classList.remove('in'); setTimeout(() => w.classList.remove('show'), 350); };
+  const close = () => { w.classList.remove('in'); setTimeout(() => { w.classList.remove('show'); maybeStartTour(); }, 350); };
   go.onclick = async () => {
     const email = document.getElementById('wEmail').value.trim(), password = pw.value;
     if (!/^\S+@\S+\.\S+$/.test(email)) return msg('Please type a valid email address.');
@@ -1946,12 +1968,14 @@ function openAccount() {
   showSheet('Sign in to sync', `<div class="meta">Use the same email and password on your iPad and iPhone to see the same timetable on both.</div>
     <label>Email</label><input type="email" id="acEmail" autocomplete="username" inputmode="email">
     <label>Password</label><input type="password" id="acPw" autocomplete="current-password" placeholder="At least 6 characters">
+    <button class="add-small" id="acForgot">Forgot password?</button>
     <div class="box warnbox" id="acMsg" style="display:none"></div>
     <div style="height:12px"></div>
     <div class="two"><button class="primary" id="acIn">Sign in</button><button class="secondary" id="acUp" style="margin-top:0">Create account</button></div>`, null, 'other');
   const msg = t => { const m = document.getElementById('acMsg'); m.style.display = ''; m.textContent = t; };
   const creds = () => ({ email: document.getElementById('acEmail').value.trim(), password: document.getElementById('acPw').value });
   const done = () => { closeSheet(); toast('Signed in · syncing'); supaInit(); };
+  document.getElementById('acForgot').onclick = () => sendReset(document.getElementById('acEmail').value.trim(), msg, msg);
   document.getElementById('acIn').onclick = async () => {
     const c = creds(); if (!c.email || !c.password) return msg('Type your email and password.');
     try { keepSession(await supaAuth('token?grant_type=password', c)); done(); } catch (e) { msg(e.message === 'Invalid login credentials' ? 'Wrong email or password. New here? Tap "Create account".' : e.message); }
@@ -1961,6 +1985,136 @@ function openAccount() {
     try { const j = await supaAuth('signup', c); if (keepSession(j)) done(); else msg('Account created. Check your email for a confirmation link, then come back and tap Sign in.'); }
     catch (e) { msg(e.message); }
   };
+}
+
+/* ================= Forgot password ================= */
+async function sendReset(email, ok, fail) {
+  if (!/^\S+@\S+\.\S+$/.test(email)) return fail('Type your email above first, then tap "Forgot password?".');
+  try {
+    const appUrl = location.origin + location.pathname;
+    await supaAuth(`recover?redirect_to=${encodeURIComponent(appUrl)}`, { email });
+    ok(`If there's an account for ${email}, a link to set a new password is on its way. Open it on this device. It can take a few minutes, so check your spam folder too.`);
+  } catch (e) {
+    fail(/rate|seconds|limit/i.test(e.message) ? 'Too many tries. Please wait a few minutes and try again.' : /not authorized/i.test(e.message) ? "We couldn't send the email to this address yet. Please use Help to ask for support." : e.message);
+  }
+}
+// Coming back from the "reset password" email: the link carries a one-time sign-in in the address
+async function handleRecovery() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get('error_description')) { history.replaceState(null, '', location.pathname); toast(h.get('error_description').replace(/\+/g, ' '), null, 8000); return false; }
+  if (h.get('type') !== 'recovery' || !h.get('access_token')) return false;
+  history.replaceState(null, '', location.pathname);
+  try {
+    const res = await fetch(`${SUPA_URL}/auth/v1/user`, { headers:{ apikey:SUPA_KEY, Authorization:'Bearer ' + h.get('access_token') } });
+    if (!res.ok) throw 0;
+    keepSession({ access_token:h.get('access_token'), refresh_token:h.get('refresh_token'), expires_in:+h.get('expires_in') || 3600, user: await res.json() });
+  } catch (e) { toast('This reset link has expired. Please ask for a new one.', null, 8000); return false; }
+  showSheet('Set a new password', `<div class="meta">Signed in as <b>${esc(supa.session.user.email)}</b>. Choose a new password for your account.</div>
+    <label>New password</label><input type="password" id="npw1" autocomplete="new-password" placeholder="At least 6 characters">
+    <label>Type it again</label><input type="password" id="npw2" autocomplete="new-password">
+    <div class="box warnbox" id="npwMsg" style="display:none"></div>
+    <div style="height:12px"></div><button class="primary" id="npwGo">Save new password</button>`, null, 'other');
+  document.getElementById('npwGo').onclick = async () => {
+    const a = document.getElementById('npw1').value, b = document.getElementById('npw2').value, m = document.getElementById('npwMsg');
+    const say = t => { m.style.display = ''; m.textContent = t; };
+    if (a.length < 6) return say('Your password needs at least 6 characters.');
+    if (a !== b) return say("The two passwords don't match.");
+    try {
+      const res = await fetch(`${SUPA_URL}/auth/v1/user`, { method:'PUT', headers:{ apikey:SUPA_KEY, Authorization:'Bearer ' + supa.session.access_token, 'Content-Type':'application/json' }, body:JSON.stringify({ password:a }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.msg || j.message || 'Could not save the password');
+      closeSheet(); toast('New password saved ✓ You are signed in.'); supaInit();
+    } catch (e) { say(e.message); }
+  };
+  return true;
+}
+
+/* ================= Help ================= */
+const APP_LINK = 'https://nadinehisham2-dev.github.io/Timetable-app/';
+function openHelp() {
+  const faq = [
+    ['How do I add something?', 'Tap any day in the calendar, then <b>+ Add</b>. Or use <b>＋ Quick add</b> at the top and type e.g. "Clinic tomorrow 9-2 check-ups".'],
+    ['How do I edit, move or delete?', 'Open the day and tap the place to edit it. <b>Press and hold</b> a place for notes, reminder, repeat, copy, move or delete. ↶ undoes any change.'],
+    ['How do I tick a task as done?', 'Open the day and tap the small box next to the task.'],
+    ['How do I see the same calendar on my phone and tablet?', 'Tap <b>Sign in to sync</b> at the top and use the same email and password on each device.'],
+    ['How do I get reminders?', 'Tap 🔔. Turn on notifications for this device, then set reminders for places or prayers. On iPhone/iPad open the app from its Home Screen icon first.'],
+    ['How do I add or change places?', 'Tap <b>+</b> after the place buttons to add one. Rename, recolour or delete them in ⚙️ Settings.'],
+  ];
+  showSheet('Help', `
+    <button class="secondary" id="hTour" style="margin-top:0">▶ Show the tour again</button>
+    <div class="lbl">Common questions</div>
+    <div class="faq">${faq.map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('')}</div>
+    <div class="lbl" style="margin-top:20px">Ask Claude</div>
+    <div class="meta" style="margin-bottom:8px">Have a question or a problem? Write it here and Claude will help. It opens Claude with your message ready to send.</div>
+    <textarea id="hQ" placeholder="e.g. My reminders don't arrive on my iPhone"></textarea>
+    <div style="height:10px"></div><button class="primary" id="hAsk">Ask Claude</button>
+    <div class="meta" id="hNote" style="margin-top:8px"></div>`, null, 'other');
+  document.getElementById('hTour').onclick = () => { closeSheet(); setTimeout(() => startTour(true), 300); };
+  document.getElementById('hAsk').onclick = async () => {
+    const q = document.getElementById('hQ').value.trim();
+    if (!q) return toast('Write your question first');
+    const ua = /iPad|Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1 ? 'iPad' : /iPhone/.test(navigator.userAgent) ? 'iPhone' : /Android/.test(navigator.userAgent) ? 'Android' : 'computer';
+    const prompt = `I'm using the Timetable app (a monthly calendar planner with places, tasks, reminders and Alexandria prayer times: ${APP_LINK}) on my ${ua}${isStandalone() ? ', opened from the Home Screen' : ''}. ${supaOn() ? (supa.session ? 'I am signed in.' : 'I am not signed in.') : ''}\n\nMy question / problem:\n${q}`;
+    try { await navigator.clipboard.writeText(prompt); } catch (e) {}
+    const a = document.createElement('a'); a.href = 'https://claude.ai/new?q=' + encodeURIComponent(prompt); a.target = '_blank'; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+    document.getElementById('hNote').textContent = 'Claude is opening. Your message is also copied: if it isn\'t filled in, just paste it.';
+  };
+}
+
+/* ================= First-time tour ================= */
+const TOUR_KEY = 'tt-tour-done';
+function tourSteps() {
+  const st = [
+    { title:'Welcome to Timetable 👋', text:'Here is a quick tour of everything you can do. It takes about a minute.' },
+    { sel:['.cell.today', '.wk-head .today', '.cell[data-date]', '.wk-col'], title:'Tap a day to plan it', text:'Tap any day to see what you have and to add plans: a place, start and end time, tasks, notes, reminders and repeats.' },
+    { sel:['#chips'], title:'Your places', text:'Each place has its own colour. Tap a place to show only that place in the calendar, or <b>All</b> to show everything. Tap <b>+</b> to add a new place.' },
+    { sel:['.seg'], title:'Month or week', text:'Switch between the whole month and a week with hours. <b>Swipe left or right</b> on the calendar to go to the next or previous month or week.' },
+    { sel:['#pickDay'], title:'Jump to a day', text:'Open today, tomorrow, after tomorrow or any date. <b>Today</b> at the top brings you back to the current date.' },
+    { sel:['#qaBtn'], title:'Quick add', text:'Type a plan in your own words, like <i>"Clinic tomorrow 9-2 check-ups"</i> or <i>"Gym every tue 9pm"</i>, and it fills everything in for you.' },
+    { title:'Inside a day', text:'<b>Tap a place</b> to edit it. <b>Tick the small box</b> next to a task when it\'s done. <b>Press and hold</b> a place for notes, reminder, repeat, copy, move or delete.' },
+    { sel:['#remBtn'], title:'Reminders', text:'Set reminders for places and for each prayer, at adhan time and before the next prayer. Turn on notifications here too.' },
+    { sel:['#setBtn'], title:'Settings', text:'Rename and recolour places, change the text size, manage templates and back up your calendar.' },
+    { sel:['#undoBtn'], title:'Undo and redo', text:'Changed or deleted something by mistake? Tap ↶ to undo it, and ↷ to bring it back.' },
+  ];
+  if (supaOn()) st.push({ sel:['#sync'], title:'Sync your devices', text:'Sign in here to keep the same calendar on your phone, tablet and other devices, automatically.' });
+  st.push({ sel:['#helpBtn'], title:'Need help?', text:'Tap here for answers to common questions, to ask Claude anything, or to see this tour again.' });
+  return st;
+}
+function maybeStartTour() { let done = null; try { done = localStorage.getItem(TOUR_KEY); } catch (e) {} if (!done) setTimeout(() => startTour(false), 400); }
+function startTour() {
+  if (document.getElementById('tour')) return;
+  if (sheetMode) closeSheet();
+  const steps = tourSteps(); let i = 0;
+  const t = document.createElement('div'); t.id = 'tour';
+  t.innerHTML = `<div class="tspot" id="tSpot"></div><div class="tcard" id="tCard" role="dialog" aria-live="polite"></div>`;
+  document.body.appendChild(t);
+  const spot = t.querySelector('#tSpot'), card = t.querySelector('#tCard');
+  const finish = () => { try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {} t.remove(); window.removeEventListener('resize', show); };
+  function target(st) { for (const sel of st.sel || []) { const el = document.querySelector(sel); if (el && el.getBoundingClientRect().width) return el; } return null; }
+  function show() {
+    const st = steps[i], el = target(st);
+    card.innerHTML = `<div class="tstep">${i + 1} of ${steps.length}</div><h3>${st.title}</h3><p>${st.text}</p>
+      <div class="tbtns"><button class="tskip" id="tSkip">${i === steps.length - 1 ? '' : 'Skip tour'}</button><span style="flex:1"></span>
+      ${i ? '<button class="tback" id="tBack">Back</button>' : ''}<button class="tnext" id="tNext">${i === steps.length - 1 ? 'Done' : 'Next'}</button></div>`;
+    card.querySelector('#tNext').onclick = () => { if (i < steps.length - 1) { i++; show(); } else finish(); };
+    const bk = card.querySelector('#tBack'); if (bk) bk.onclick = () => { i--; show(); };
+    card.querySelector('#tSkip').onclick = finish;
+    const vw = window.innerWidth, vh = window.innerHeight, cw = Math.min(340, vw - 24);
+    card.style.width = cw + 'px';
+    if (!el) { spot.style.opacity = '0'; t.classList.add('dim'); card.style.left = (vw - cw) / 2 + 'px'; card.style.top = Math.max(20, vh / 2 - card.offsetHeight / 2) + 'px'; return; }
+    t.classList.remove('dim'); spot.style.opacity = '1';
+    el.scrollIntoView({ block:'nearest' });
+    const r = el.getBoundingClientRect(), pad = 6;
+    const big = r.height > vh * 0.5;   // e.g. a whole calendar column: just frame the top part
+    const sh = big ? Math.min(r.height, 120) : r.height;
+    Object.assign(spot.style, { left:(r.left - pad) + 'px', top:(r.top - pad) + 'px', width:(r.width + pad * 2) + 'px', height:(sh + pad * 2) + 'px' });
+    const ch = card.offsetHeight, below = r.top + sh + pad + 12, above = r.top - pad - 12 - ch;
+    card.style.top = (below + ch < vh - 10 ? below : Math.max(10, above)) + 'px';
+    card.style.left = Math.min(Math.max(12, r.left + r.width / 2 - cw / 2), vw - cw - 12) + 'px';
+  }
+  window.addEventListener('resize', show);
+  show();
 }
 
 async function initCloud() {
@@ -1991,14 +2145,18 @@ applyTextSize();
 lastSaved = JSON.stringify(db);
 document.getElementById('undoBtn').onclick = undo;
 document.getElementById('redoBtn').onclick = redo;
+document.getElementById('helpBtn').onclick = openHelp;
 render();
 initCloud();
 if (!window.claude) {
   supaInit();
   // Not signed in: show the welcome page each time the app is opened again (skipping only lasts while it stays open)
   let skipped = null; try { skipped = sessionStorage.getItem('tt-welcome-skip'); } catch (e) {}
-  if (supaOn() && !supa.session && !skipped) showWelcome();
-}
+  handleRecovery().then(recovering => {
+    if (recovering) return;
+    if (supaOn() && !supa.session && !skipped) showWelcome(); else maybeStartTour();
+  });
+} else maybeStartTour();
 // Offline mode for the installed app (GitHub Pages)
 try { if ('serviceWorker' in navigator && location.protocol === 'https:' && /github\.io$/.test(location.hostname)) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
 let lastDay = todayIso();
