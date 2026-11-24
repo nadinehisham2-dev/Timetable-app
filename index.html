@@ -182,6 +182,10 @@
     border:1px solid var(--line); background:var(--bg); color:var(--text); }
   textarea { min-height:64px; resize:vertical; }
   .row { display:flex; gap:10px; } .row > * { flex:1; min-width:0; }
+  .task-row .tt { flex:none; width:112px; padding:10px 6px; }
+  .ttm { font-size:.9em; }
+  .ttm2 { font-weight:600; color:var(--muted); }
+  .btt { font-style:normal; display:block; opacity:.85; font-size:.95em; }
   .task-row { display:flex; gap:6px; margin-bottom:6px; }
   .task-row button, .place-row button { background:none; border:none; color:#ff3b30; font-size:22px; cursor:pointer; padding:0 6px; }
   .add-small { background:none; border:none; color:var(--accent); font-size:15px; padding:6px 0; cursor:pointer; }
@@ -416,6 +420,8 @@ function entriesFor(date, all) {
     .sort((a, b) => (a.start || '99').localeCompare(b.start || '99'));
 }
 const doneSet = (e, date) => new Set(e.done[date] || []);
+const taskT = (e, i) => (e.taskTimes || [])[i] || '';   // optional time for a task
+const withT = (e, i, t) => taskT(e, i) ? `${fmtTime(taskT(e, i))} ${t}` : t;
 function repeatText(r) {
   if (!r) return '';
   if (r.freq === 'daily') return 'Every day';
@@ -501,7 +507,7 @@ function cellItems(date) {
   return entriesFor(date).map(e => {
     const p = place(e.placeId), time = fmtRange(e.start, e.end), done = doneSet(e, date);
     let s = `<div class="sec"><div class="pl" style="color:${esc(p.color)}">${esc(p.name)}${time ? ' <span class="tm">' + time + '</span>' : ''}</div>`;
-    e.tasks.forEach((tk, i) => { if (tk) s += `<div class="${done.has(i) ? 'done' : ''}">-${esc(tk)}-</div>`; });
+    e.tasks.forEach((tk, i) => { if (tk) s += `<div class="${done.has(i) ? 'done' : ''}">-${taskT(e, i) ? `<span class="tm ttm">${fmtTime(taskT(e, i))}</span> ` : ''}${esc(tk)}-</div>`; });
     return s + '</div>';
   }).join('');
 }
@@ -566,7 +572,7 @@ function renderWeek(fitH) {
       const left = L.lane / L.cols * 100, width = 100 / L.cols;
       boxes.push({ top, bot: top + h, left, width });
       const dn = doneSet(en, date);
-      const tasks = en.tasks.map((t, ti) => t ? `<span class="bt${dn.has(ti) ? ' done' : ''}">${esc(t)}</span>` : '').join('');
+      const tasks = en.tasks.map((t, ti) => t ? `<span class="bt${dn.has(ti) ? ' done' : ''}">${taskT(en, ti) ? `<i class="btt">${fmtTime(taskT(en, ti))}</i>` : ''}${esc(t)}</span>` : '').join('');
       c += `<div class="blk${L.cols > 1 ? ' ov' : ''}${L.cols > 1 && L.lane % 2 ? ' alt' : ''}" style="top:${top}px;height:${h}px;left:calc(${left}% + 1px);width:calc(${width}% - 2px);background:${esc(p.color)}" data-date="${date}" data-id="${en.id}"><b>${esc(p.name)}</b><span class="tm">${fmtRange(en.start, en.end)}</span>${tasks}</div>`;
     });
     const pt = prayerTimes(date);
@@ -827,7 +833,7 @@ function openDay(date) {
       <div class="top" data-edit="${e.id}"><span><span style="color:${esc(p.color)}">${esc(p.name)}</span>
         <span class="tm" style="color:${esc(p.color)}">${fmtRange(e.start, e.end)}</span>
         </span><span class="edit">Edit</span></div>
-      ${e.tasks.map((t, i) => t ? `<label class="chk"><input type="checkbox" data-e="${e.id}" data-i="${i}" ${done.has(i) ? 'checked' : ''}><span class="${done.has(i) ? 'done' : ''}">${esc(t)}</span></label>` : '').join('')}
+      ${e.tasks.map((t, i) => t ? `<label class="chk"><input type="checkbox" data-e="${e.id}" data-i="${i}" ${done.has(i) ? 'checked' : ''}><span class="${done.has(i) ? 'done' : ''}">${taskT(e, i) ? `<b class="tm ttm2">${fmtTime(taskT(e, i))}</b> ` : ''}${esc(t)}</span></label>` : '').join('')}
       ${e.note ? `<div class="note">${esc(e.note)}</div>` : ''}
       ${e.remind != null ? `<div class="meta">🔔 ${remindLabel(e.remind)}</div>` : ''}
     </div>`;
@@ -884,7 +890,7 @@ function openEditor(date, id) {
       <div><label>Start</label><input type="time" id="fStart" value="${esc(e.start)}"></div>
       <div><label>End</label><input type="time" id="fEnd" value="${esc(e.end)}"></div>
     </div>
-    <label>Tasks</label><div id="fTasks"></div>
+    <label>Tasks <span style="text-transform:none;letter-spacing:0">· time is optional</span></label><div id="fTasks"></div>
     <button class="add-small" id="fAddTask">+ Add task</button>
     <label>Notes</label><textarea id="fNote" placeholder="Optional">${esc(e.note)}</textarea>
     <label>Reminder</label>
@@ -911,14 +917,14 @@ function openEditor(date, id) {
   showSheet(orig ? 'Edit' : 'New', html, () => openDay(date), 'edit');
 
   const tasksEl = document.getElementById('fTasks');
-  const addTask = (v = '') => {
+  const addTask = (v = '', tm = '') => {
     const row = document.createElement('div'); row.className = 'task-row';
-    row.innerHTML = `<input type="text" placeholder="e.g. pt diagnosis"><button aria-label="Remove">−</button>`;
-    row.querySelector('input').value = v; row.querySelector('button').onclick = () => row.remove();
+    row.innerHTML = `<input type="text" class="tx" placeholder="e.g. pt diagnosis"><input type="time" class="tt" aria-label="Task time (optional)"><button aria-label="Remove">−</button>`;
+    row.querySelector('.tx').value = v; row.querySelector('.tt').value = tm; row.querySelector('button').onclick = () => row.remove();
     tasksEl.appendChild(row); return row;
   };
-  (e.tasks.length ? e.tasks : ['']).forEach(t => addTask(t));
-  document.getElementById('fAddTask').onclick = () => addTask().querySelector('input').focus();
+  (e.tasks.length ? e.tasks : ['']).forEach((t, i) => addTask(t, taskT(e, i)));
+  document.getElementById('fAddTask').onclick = () => addTask().querySelector('.tx').focus();
 
   const freq = document.getElementById('fFreq'); freq.value = e.repeat ? e.repeat.freq : 'none';
   const syncRepeatUI = () => {
@@ -944,7 +950,8 @@ function openEditor(date, id) {
     const f = freq.value;
     return {
       placeId: sel.value, start: document.getElementById('fStart').value, end: document.getElementById('fEnd').value,
-      tasks: [...tasksEl.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean),
+      ...(() => { const rows = [...tasksEl.querySelectorAll('.task-row')].map(rw => [rw.querySelector('.tx').value.trim(), rw.querySelector('.tt').value]).filter(([t]) => t);
+        return { tasks: rows.map(([t]) => t), taskTimes: rows.map(([, tm]) => tm) }; })(),
       note: document.getElementById('fNote').value.trim(), remind: readPicker('fRemind'),
       repeat: f === 'none' ? null : { freq:f, until:document.getElementById('fUntil').value,
         anchor: (orig && orig.repeat && (orig.repeat.anchor || orig.date)) || date,
@@ -1112,7 +1119,7 @@ function saveTemplate(date) {
     const name = document.getElementById('tplName').value.trim(); if (!name) return toast('Give the template a name');
     const withTasks = document.getElementById('tplTasks').checked;
     withUndo(`Template "${name}" saved`, () => db.templates.push({ id:uid(), name,
-      items: items.map(e => ({ placeId:e.placeId, start:e.start, end:e.end, tasks: withTasks ? [...e.tasks] : [], note:e.note, remind:e.remind })) }), () => openDay(date));
+      items: items.map(e => ({ placeId:e.placeId, start:e.start, end:e.end, tasks: withTasks ? [...e.tasks] : [], taskTimes: withTasks ? [...(e.taskTimes || [])] : [], note:e.note, remind:e.remind })) }), () => openDay(date));
   };
 }
 function openTemplates(date) {
@@ -1135,7 +1142,7 @@ function unfinished() {   // tasks not ticked on past days (last 30 days, since 
     entriesFor(d, true).forEach(e => {
       if (e.repeat && !db.carryRepeats) return;
       const done = doneSet(e, d), drop = new Set(e.drop[d] || []);
-      e.tasks.forEach((t, i) => { if (t && !done.has(i) && !drop.has(i)) out.push({ e, d, i, t }); });
+      e.tasks.forEach((t, i) => { if (t && !done.has(i) && !drop.has(i)) out.push({ e, d, i, t: withT(e, i, t) }); });
     });
   return out;
 }
@@ -1171,7 +1178,7 @@ function openTodo() {
       mark(e, d, i, 'drop');
       let tgt = db.entries.find(x => !x.repeat && x.date === today && x.placeId === e.placeId);
       if (!tgt) { tgt = { ...clone(e), id:uid(), date:today, repeat:null, skip:[], extra:[], done:{}, drop:{}, tasks:[] }; db.entries.push(tgt); }
-      tgt.tasks.push(e.tasks[i]);
+      tgt.taskTimes = tgt.taskTimes || []; tgt.taskTimes[tgt.tasks.length] = taskT(e, i); tgt.tasks.push(e.tasks[i]);
     }, openTodo);
   });
   document.getElementById('carryRep').onchange = ev => withUndo(ev.target.checked ? 'Including repeating items' : 'Hiding repeating items', () => { db.carryRepeats = ev.target.checked; }, openTodo);
@@ -1198,7 +1205,7 @@ function shareText(o) {
   if (!days.length) return 'Nothing planned for these dates.';
   return `📅 My schedule · ${shortDate(o.from)} – ${shortDate(o.to)}\n\n` + days.map(({ d, items }) =>
     `*${longDate(d)}*\n` + items.map(e => `• ${place(e.placeId).name}${e.start ? ' ' + fmtRange(e.start, e.end) : ''}` +
-      (o.tasks && e.tasks.length ? '\n' + e.tasks.map(t => `   - ${t}`).join('\n') : '') + (o.notes && e.note ? `\n   (${e.note})` : '')).join('\n')).join('\n\n');
+      (o.tasks && e.tasks.length ? '\n' + e.tasks.map((t, i) => `   - ${withT(e, i, t)}`).join('\n') : '') + (o.notes && e.note ? `\n   (${e.note})` : '')).join('\n')).join('\n\n');
 }
 function shareImage(o) {
   const days = shareData(o), W = 1080, P = 60, cv = document.createElement('canvas'), x = cv.getContext('2d');
@@ -1206,7 +1213,7 @@ function shareImage(o) {
   const rows = [];
   days.forEach(({ d, items }) => {
     rows.push({ type:'day', d });
-    items.forEach(e => { rows.push({ type:'item', e }); if (o.tasks) e.tasks.forEach(t => rows.push({ type:'task', t })); if (o.notes && e.note) rows.push({ type:'task', t: e.note, note:true }); });
+    items.forEach(e => { rows.push({ type:'item', e }); if (o.tasks) e.tasks.forEach((t, i) => rows.push({ type:'task', t: withT(e, i, t) })); if (o.notes && e.note) rows.push({ type:'task', t: e.note, note:true }); });
   });
   const hOf = r => r.type === 'day' ? 74 : r.type === 'item' ? 52 : 40;
   const H = Math.max(400, 200 + rows.reduce((a, r) => a + hOf(r), 0) + P);
