@@ -530,7 +530,7 @@ function renderWeek(fitH) {
   // Upright: shrink the hours so the whole day fits on screen (bigger text setting allows a little scrolling)
   if (!fitH && !isSideways() && body.clientHeight > 100) {
     const fit = Math.max(Math.round(16 * (ui.ts || 1)), Math.floor((body.clientHeight - 4) / hoursShown));
-    if (Math.abs(fit - H) > 1) return renderWeek(fit);
+    if (fit !== H) return renderWeek(fit);
   }
   bindSwipe(isSideways() ? main.querySelector('.week') : body);
 }
