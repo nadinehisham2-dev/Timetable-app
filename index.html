@@ -86,10 +86,16 @@
   .blk { position:absolute; left:2px; right:2px; border-radius:6px; padding:2px 4px; font-size:10px; line-height:1.25;
     overflow:hidden; cursor:pointer; color:#fff; z-index:1; }
   .blk .tm { font-size:.9em; display:block; }
-  .pr { position:absolute; left:0; right:0; border-top:1px dashed var(--prayer); pointer-events:none; }
-  .pr span { position:absolute; right:1px; top:-11px; font-size:8px; color:var(--prayer); background:var(--bg); padding:0 2px; border-radius:3px; }
-  .pr i { font-style:normal; }
-  @media (max-width:699px) { .pr i { display:none; } }
+  .blk { box-shadow:0 0 0 1px var(--bg); }
+  .blk.alt { filter:brightness(.82) saturate(1.1); }
+  .blk.ov { border:1.5px solid rgba(255,255,255,.85); }
+  .pr { position:absolute; left:0; right:0; border-top:1.5px dashed var(--prayer); pointer-events:none; z-index:3; }
+  .pr.hit { right:auto; border-top:2px dashed #fff; filter:drop-shadow(0 0 1px rgba(0,0,0,.6)); z-index:4; }
+  .prl { position:absolute; right:1px; transform:translateY(-110%); font-size:9px; font-weight:600; color:var(--prayer);
+    background:var(--bg); padding:0 3px; border-radius:4px; pointer-events:none; z-index:5; white-space:nowrap; }
+  .prl.hit { background:#111; color:#fff; }
+  .prl i { font-style:normal; }
+  @media (max-width:699px) { .prl i { display:none; } }
   .now { position:absolute; left:0; right:0; border-top:2px solid var(--accent); pointer-events:none; z-index:2; }
   .allblk { border-radius:4px; color:#fff; padding:1px 3px; margin-bottom:2px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
@@ -130,7 +136,7 @@
   .secondary { width:100%; background:var(--soft); color:var(--text); border:none; border-radius:12px; font-size:16px; padding:12px; cursor:pointer; margin-top:8px; }
   .danger { width:100%; background:none; color:#ff3b30; border:none; font-size:16px; padding:12px; cursor:pointer; margin-top:4px; }
   .two { display:flex; gap:8px; } .two > * { flex:1; }
-  .lbl, .sheet-body > label, .sheet-body .row label { display:block; font-size:12px; color:var(--muted); margin:14px 0 5px; text-transform:uppercase; letter-spacing:.3px; }
+  .lbl, .sheet-body > label:not(.chk), .sheet-body .row label { display:block; font-size:12px; color:var(--muted); margin:14px 0 5px; text-transform:uppercase; letter-spacing:.3px; }
   input, select, textarea { width:100%; font:inherit; font-size:16px; padding:10px 12px; border-radius:10px;
     border:1px solid var(--line); background:var(--bg); color:var(--text); }
   textarea { min-height:64px; resize:vertical; }
@@ -148,6 +154,13 @@
   .warn { color:var(--accent); font-weight:600; }
   .prow { display:grid; grid-template-columns:72px 1fr; align-items:start; gap:8px; padding:6px 0; }
   .prow b { padding-top:11px; color:var(--prayer); }
+  .badge { border:none; background:var(--soft); color:var(--accent); border-radius:12px; font-size:12px; font-weight:600; padding:3px 9px; margin-right:6px; cursor:pointer; }
+  .todo { display:flex; align-items:center; gap:4px; border-bottom:1px solid var(--line); }
+  .mini { border:none; background:var(--soft); color:var(--accent); border-radius:8px; padding:6px 8px; font-size:13px; cursor:pointer; white-space:nowrap; }
+  .mini.x { color:var(--muted); background:none; font-size:16px; }
+  #sPlaces button.on { background:var(--c); color:#fff; border-style:solid; border-color:var(--c); }
+  .preview { background:var(--soft); border-radius:12px; padding:12px; font:13px/1.45 -apple-system, system-ui, sans-serif; white-space:pre-wrap; max-height:220px; overflow:auto; margin:0 0 10px; }
+  .warnbox { border:1.5px solid var(--accent); }
   .res { padding:10px 0; border-bottom:1px solid var(--line); cursor:pointer; }
   .res small { color:var(--muted); display:block; }
 
@@ -170,12 +183,13 @@
     <button class="icon-btn" id="prev" aria-label="Previous">‹</button>
     <button class="icon-btn" id="next" aria-label="Next">›</button>
     <span class="spacer"></span>
+    <button class="icon-btn" id="shareBtn" aria-label="Share schedule">📤</button>
     <button class="icon-btn" id="searchBtn" aria-label="Search">🔍</button>
     <button class="icon-btn" id="remBtn" aria-label="Reminders">🔔</button>
     <button class="icon-btn" id="setBtn" aria-label="Places and settings">🎨</button>
   </div>
   <div class="row2" style="margin-top:2px">
-    <span class="info" id="nextPrayer"></span><span class="spacer"></span><span class="info" id="sync">Saved on this device</span>
+    <span class="info" id="nextPrayer"></span><span class="spacer"></span><button class="badge" id="todoBadge" style="display:none"></button><span class="info" id="sync">Saved on this device</span>
   </div>
   <div class="chips" id="chips"></div>
 </header>
@@ -204,13 +218,16 @@ const DEFAULT = { places: [
 function normalize(d) {
   d = d && d.places ? d : JSON.parse(JSON.stringify(DEFAULT));
   d.entries = (d.entries || []).map(e => ({ tasks:[], note:'', start:'', end:'', remind:null, repeat:null,
-    skip:[], extra:[], done:{}, ...e }));
+    skip:[], extra:[], done:{}, drop:{}, ...e }));
   d.places.forEach(p => { if (p.remind === undefined) p.remind = null; });
   d.prayerRemind = d.prayerRemind || {};
+  d.carryFrom = d.carryFrom || todayIsoRaw();
+  if (d.carryRepeats === undefined) d.carryRepeats = false;
   d.updated = d.updated || 0;
   return d;
 }
 const clone = o => JSON.parse(JSON.stringify(o));
+function todayIsoRaw() { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
 let db = (() => { try { return normalize(JSON.parse(localStorage.getItem(KEY))); } catch (e) { return normalize(null); } })();
 let ui = (() => { try { return { mode:'month', filter:[], ...JSON.parse(localStorage.getItem(UIKEY)) }; } catch (e) { return { mode:'month', filter:[] }; } })();
 const saveUI = () => { try { localStorage.setItem(UIKEY, JSON.stringify({ mode:ui.mode, filter:ui.filter })); } catch (e) {} };
@@ -408,27 +425,52 @@ function renderMonth() {
 
 const H = 46, START_H = 3;   // px per hour, first hour shown
 function weekStart() { const d = new Date(cursor); d.setDate(d.getDate() - (d.getDay() + 1) % 7); return isoOf(d); }
+// Put overlapping items side by side: returns id -> {lane, cols}
+function layoutLanes(list) {
+  const items = list.filter(e => e.start).map(e => ({ e, s: toMin(e.start), f: toMin(e.end) > toMin(e.start) ? toMin(e.end) : toMin(e.start) + 60 }))
+    .sort((a, b) => a.s - b.s || b.f - a.f);
+  const out = {}; let cluster = [], laneEnds = [], clusterEnd = -1;
+  const close = () => { cluster.forEach(c => out[c.e.id].cols = laneEnds.length); cluster = []; laneEnds = []; };
+  items.forEach(it => {
+    if (it.s >= clusterEnd) close();
+    let lane = laneEnds.findIndex(end => end <= it.s);
+    if (lane < 0) { lane = laneEnds.length; laneEnds.push(it.f); } else laneEnds[lane] = it.f;
+    out[it.e.id] = { lane, cols: 1, s: it.s, f: it.f }; cluster.push(it); clusterEnd = Math.max(clusterEnd, it.f);
+  });
+  close();
+  return out;
+}
 function renderWeek() {
   const ws = weekStart(), dates = [...Array(7)].map((_, i) => addDays(ws, i)), today = todayIso();
   const s = parse(ws), e = parse(dates[6]), same = s.getMonth() === e.getMonth();
   document.getElementById('mName').textContent = same ? MONTHS[s.getMonth()] : `${s.getDate()} ${MONTHS[s.getMonth()].slice(0, 3)} – ${e.getDate()} ${MONTHS[e.getMonth()].slice(0, 3)}`;
   document.getElementById('yName').textContent = same ? `${s.getDate()}–${e.getDate()}, ${e.getFullYear()}` : e.getFullYear();
-  const pos = t => (toMin(t) / 60 - START_H) * H;
+  const y = m => (m / 60 - START_H) * H;
   let head = '<div></div>', all = '<div>all-day</div>', cols = '';
   dates.forEach((date, i) => {
     const d = parse(date), we = WEEKEND.has(i) ? ' we' : '';
     head += `<div class="${we}${date === today ? ' today' : ''}" data-date="${date}">${DAYS[i]}<b>${d.getDate()}</b></div>`;
     let a = '', c = '';
-    entriesFor(date).forEach(en => {
+    const list = entriesFor(date), lanes = layoutLanes(list), boxes = [];
+    list.forEach(en => {
       const p = place(en.placeId);
       if (!en.start) { a += `<div class="allblk" style="background:${esc(p.color)}" data-date="${date}" data-id="${en.id}">${esc(p.name)}</div>`; return; }
-      const top = Math.max(0, pos(en.start)), end = en.end ? pos(en.end) : top + H;
+      const L = lanes[en.id], top = Math.max(0, y(L.s)), h = Math.max(22, y(L.f) - top - 2);
+      const left = L.lane / L.cols * 100, width = 100 / L.cols;
+      boxes.push({ top, bot: top + h, left, width });
       const tasks = en.tasks.filter(Boolean).map(esc).join(', ');
-      c += `<div class="blk" style="top:${top}px;height:${Math.max(22, end - top - 2)}px;background:${esc(p.color)}" data-date="${date}" data-id="${en.id}"><b>${esc(p.name)}</b><span class="tm">${fmtRange(en.start, en.end)}</span>${tasks}</div>`;
+      c += `<div class="blk${L.cols > 1 ? ' ov' : ''}${L.cols > 1 && L.lane % 2 ? ' alt' : ''}" style="top:${top}px;height:${h}px;left:calc(${left}% + 1px);width:calc(${width}% - 2px);background:${esc(p.color)}" data-date="${date}" data-id="${en.id}"><b>${esc(p.name)}</b><span class="tm">${fmtRange(en.start, en.end)}</span>${tasks}</div>`;
     });
     const pt = prayerTimes(date);
-    PRAYERS.forEach(([k, name]) => { if (k !== 'sunrise') c += `<div class="pr" style="top:${pos(pt[k])}px"><span><i>${name} </i>${fmtTime(pt[k])}</span></div>`; });
-    if (date === today) { const n = new Date(); c += `<div class="now" style="top:${((n.getHours() + n.getMinutes() / 60) - START_H) * H}px"></div>`; }
+    PRAYERS.forEach(([k, name]) => {
+      if (k === 'sunrise') return;
+      const py = y(toMin(pt[k])), hit = boxes.filter(b => py >= b.top && py <= b.bot);
+      const onRight = hit.some(b => b.left + b.width > 99);
+      c += `<div class="pr" style="top:${py}px"></div>`;
+      hit.forEach(b => { c += `<div class="pr hit" style="top:${py}px;left:${b.left}%;width:${b.width}%"></div>`; });
+      c += `<div class="prl${onRight ? ' hit' : ''}" style="top:${py}px"><i>${name} </i>${fmtTime(pt[k])}${db.prayerRemind[k] != null ? ' 🔔' : ''}</div>`;
+    });
+    if (date === today) { const n = new Date(); c += `<div class="now" style="top:${y(n.getHours() * 60 + n.getMinutes())}px"></div>`; }
     all += `<div>${a}</div>`;
     cols += `<div class="wk-col${we}" data-date="${date}" style="height:${(24 - START_H) * H}px">${c}</div>`;
   });
@@ -446,7 +488,7 @@ function render() {
   document.getElementById('vMonth').classList.toggle('on', ui.mode === 'month');
   document.getElementById('vWeek').classList.toggle('on', ui.mode === 'week');
   ui.mode === 'week' ? renderWeek() : renderMonth();
-  updateNextPrayer();
+  updateNextPrayer(); updateTodoBadge();
 }
 
 main.addEventListener('click', e => {
@@ -526,6 +568,7 @@ function openDay(date) {
       ${e.remind != null ? `<div class="meta">🔔 ${remindLabel(e.remind)}</div>` : ''}
     </div>`;
   });
+  if (date === todayIso()) { const n = unfinished().length; if (n) html += `<button class="secondary" id="openTodo" style="margin:0 0 10px">↺ ${n} unfinished task${n > 1 ? 's' : ''} from earlier days</button>`; }
   html += `<button class="primary" id="addEntry">+ Add</button>`;
   const missing = db.entries.filter(e => e.repeat && !occurs(e, date));
   if (missing.length) html += `<div class="lbl">Add a repeating item to this day only</div><div class="quick">` +
@@ -548,6 +591,7 @@ function openDay(date) {
     }, () => openDay(date));
   });
   document.getElementById('addEntry').onclick = () => openEditor(date);
+  const ot = document.getElementById('openTodo'); if (ot) ot.onclick = openTodo;
 }
 
 /* ================= Editor ================= */
@@ -587,6 +631,7 @@ function openEditor(date, id) {
       <div class="lbl">Until (optional)</div><input type="date" id="fUntil" value="${esc(r.until || '')}">
       ${orig && orig.repeat ? `<div class="meta" style="margin-top:8px">Starts ${shortDate(orig.date)}${orig.skip.length ? ` · removed on ${orig.skip.length} day(s)` : ''}${orig.extra.length ? ` · added on ${orig.extra.length} extra day(s)` : ''}</div>` : ''}
     </div>
+    <div class="box warnbox" id="fWarn" style="display:none"></div>
     <div style="height:16px"></div>
     <button class="primary" id="fSave">Save</button>
     ${orig ? `<div class="two"><button class="secondary" id="fCopy">Copy to…</button><button class="secondary" id="fMove">Move to…</button></div>
@@ -631,6 +676,9 @@ function openEditor(date, id) {
     };
   };
 
+  let clashOk = false;
+  const resetClash = () => { clashOk = false; document.getElementById('fWarn').style.display = 'none'; document.getElementById('fSave').textContent = 'Save'; };
+  ['fStart', 'fEnd'].forEach(id => document.getElementById(id).addEventListener('input', resetClash));
   document.getElementById('fSave').onclick = () => {
     if (sel.value === '__new') {
       const name = document.getElementById('fNewName').value.trim();
@@ -643,6 +691,18 @@ function openEditor(date, id) {
     const data = readForm();
     if (!data.placeId) return toast('Choose a place');
     if (data.remind === undefined) return toast('Type how long before you want the reminder');
+    if (!clashOk && data.start) {
+      const clash = findClashes(date, data, orig);
+      if (clash.length) {
+        clashOk = true;
+        const w = document.getElementById('fWarn');
+        w.innerHTML = `<span class="warn">⚠️ Overlaps with ${clash.map(x => esc(place(x.placeId).name) + ' ' + fmtRange(x.start, x.end)).join(', ')}</span>
+          <div class="meta">Change the start/end time above, or tap <b>Save anyway</b>.</div>`;
+        w.style.display = ''; document.getElementById('fSave').textContent = 'Save anyway';
+        w.scrollIntoView({ block:'center', behavior:'smooth' });
+        return;
+      }
+    }
     if (data.repeat && data.repeat.freq === 'weekly' && !data.repeat.days.length) return toast('Pick at least one day to repeat on');
     if (!orig) {
       withUndo('Added', () => db.entries.push({ ...e, ...data, id:uid(), date }), () => openDay(date));
@@ -676,6 +736,10 @@ function openEditor(date, id) {
   document.getElementById('fMove').onclick = () => openTransfer(date, orig, 'move');
 }
 
+function findClashes(date, item, except) {
+  const end = x => toMin(x.end) > toMin(x.start) ? toMin(x.end) : toMin(x.start) + 60;
+  return entriesFor(date, true).filter(x => x !== except && x.start && toMin(x.start) < end(item) && toMin(item.start) < end(x));
+}
 /* ===== Copy / move: pick a day, confirm, then Undo is available ===== */
 function openTransfer(from, e, kind) {
   const p = place(e.placeId), verb = kind === 'copy' ? 'Copy' : 'Move';
@@ -714,6 +778,139 @@ function openTransfer(from, e, kind) {
   };
 }
 
+/* ================= Unfinished tasks ================= */
+function unfinished() {   // tasks not ticked on past days (last 30 days, since the feature started)
+  const out = [], today = todayIso();
+  let from = addDays(today, -30); if (db.carryFrom > from) from = db.carryFrom;
+  for (let d = from; d < today; d = addDays(d, 1))
+    entriesFor(d, true).forEach(e => {
+      if (e.repeat && !db.carryRepeats) return;
+      const done = doneSet(e, d), drop = new Set(e.drop[d] || []);
+      e.tasks.forEach((t, i) => { if (t && !done.has(i) && !drop.has(i)) out.push({ e, d, i, t }); });
+    });
+  return out;
+}
+function updateTodoBadge() {
+  const n = unfinished().length, el = document.getElementById('todoBadge');
+  el.style.display = n ? '' : 'none'; el.textContent = `↺ ${n} unfinished`;
+}
+function openTodo() {
+  const list = unfinished();
+  let html = list.length ? '<div class="meta" style="margin-bottom:8px">Tasks you didn\'t tick off on earlier days. Tick when done, move one to today, or remove it from this list.</div>' : '<div class="empty-msg">All caught up 🎉</div>';
+  let last = '';
+  list.forEach(({ e, d, i, t }) => {
+    if (d !== last) { html += `<div class="lbl">${longDate(d)}</div>`; last = d; }
+    const p = place(e.placeId);
+    html += `<div class="todo"><label class="chk" style="flex:1"><input type="checkbox" data-e="${e.id}" data-d="${d}" data-i="${i}"><span>${esc(t)} <small style="color:${esc(p.color)}">· ${esc(p.name)}</small></span></label>
+      <button class="mini" data-mv="${e.id}|${d}|${i}">→ Today</button><button class="mini x" data-rm="${e.id}|${d}|${i}" aria-label="Remove">✕</button></div>`;
+  });
+  html += `<label class="chk" style="margin-top:18px"><input type="checkbox" id="carryRep" ${db.carryRepeats ? 'checked' : ''}><span>Include tasks from repeating items</span></label>`;
+  showSheet('Unfinished tasks', html, null, 'todo');
+  const get = v => { const [id, d, i] = v.split('|'); return { e: db.entries.find(x => x.id === id), d, i: +i }; };
+  const mark = (e, d, i, key) => { const s = new Set(e[key][d] || []); s.add(i); e[key][d] = [...s]; };
+  body.querySelectorAll('.todo input').forEach(cb => cb.onchange = () => {
+    const { e, d, i } = get(`${cb.dataset.e}|${cb.dataset.d}|${cb.dataset.i}`);
+    withUndo('Marked done', () => mark(e, d, i, 'done'), openTodo);
+  });
+  body.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => {
+    const { e, d, i } = get(b.dataset.rm);
+    withUndo('Removed from list', () => mark(e, d, i, 'drop'), openTodo);
+  });
+  body.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => {
+    const { e, d, i } = get(b.dataset.mv), today = todayIso();
+    withUndo('Moved to today', () => {
+      mark(e, d, i, 'drop');
+      let tgt = db.entries.find(x => !x.repeat && x.date === today && x.placeId === e.placeId);
+      if (!tgt) { tgt = { ...clone(e), id:uid(), date:today, repeat:null, skip:[], extra:[], done:{}, drop:{}, tasks:[] }; db.entries.push(tgt); }
+      tgt.tasks.push(e.tasks[i]);
+    }, openTodo);
+  });
+  document.getElementById('carryRep').onchange = ev => withUndo(ev.target.checked ? 'Including repeating items' : 'Hiding repeating items', () => { db.carryRepeats = ev.target.checked; }, openTodo);
+}
+
+/* ================= Share ================= */
+function shareRange(kind) {
+  const t = todayIso(), ws = (() => { const d = parse(t); d.setDate(d.getDate() - (d.getDay() + 1) % 7); return isoOf(d); })();
+  if (kind === 'thisweek') return [ws, addDays(ws, 6)];
+  if (kind === 'nextweek') return [addDays(ws, 7), addDays(ws, 13)];
+  const d = parse(t), m = kind === 'nextmonth' ? d.getMonth() + 1 : d.getMonth();
+  return [isoOf(new Date(d.getFullYear(), m, 1)), isoOf(new Date(d.getFullYear(), m + 1, 0))];
+}
+function shareData(o) {
+  const days = [];
+  for (let d = o.from; d <= o.to; d = addDays(d, 1)) {
+    const items = entriesFor(d, true).filter(e => !o.places.length || o.places.includes(e.placeId));
+    if (items.length) days.push({ d, items });
+  }
+  return days;
+}
+function shareText(o) {
+  const days = shareData(o);
+  if (!days.length) return 'Nothing planned for these dates.';
+  return `📅 My schedule · ${shortDate(o.from)} – ${shortDate(o.to)}\n\n` + days.map(({ d, items }) =>
+    `*${longDate(d)}*\n` + items.map(e => `• ${place(e.placeId).name}${e.start ? ' ' + fmtRange(e.start, e.end) : ''}` +
+      (o.tasks && e.tasks.length ? '\n' + e.tasks.map(t => `   - ${t}`).join('\n') : '') + (o.notes && e.note ? `\n   (${e.note})` : '')).join('\n')).join('\n\n');
+}
+function shareImage(o) {
+  const days = shareData(o), W = 1080, P = 60, cv = document.createElement('canvas'), x = cv.getContext('2d');
+  const F = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+  const rows = [];
+  days.forEach(({ d, items }) => {
+    rows.push({ type:'day', d });
+    items.forEach(e => { rows.push({ type:'item', e }); if (o.tasks) e.tasks.forEach(t => rows.push({ type:'task', t })); if (o.notes && e.note) rows.push({ type:'task', t: e.note, note:true }); });
+  });
+  const hOf = r => r.type === 'day' ? 74 : r.type === 'item' ? 52 : 40;
+  const H = Math.max(400, 200 + rows.reduce((a, r) => a + hOf(r), 0) + P);
+  cv.width = W; cv.height = H;
+  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#111'; x.font = `800 56px ${F}`; x.fillText('My schedule', P, 110);
+  x.fillStyle = '#8e8e93'; x.font = `400 32px ${F}`; x.fillText(`${shortDate(o.from)} – ${shortDate(o.to)}`, P, 160);
+  let yy = 200;
+  if (!rows.length) { x.fillText('Nothing planned for these dates.', P, 260); }
+  rows.forEach(r => {
+    yy += hOf(r);
+    if (r.type === 'day') { x.fillStyle = '#e3e3e6'; x.fillRect(P, yy - 56, W - 2 * P, 2); x.fillStyle = '#111'; x.font = `700 34px ${F}`; x.fillText(longDate(r.d), P, yy - 12); }
+    else if (r.type === 'item') {
+      const p = place(r.e.placeId); x.fillStyle = p.color; x.beginPath(); x.arc(P + 12, yy - 14, 10, 0, 7); x.fill();
+      x.font = `700 32px ${F}`; x.fillText(p.name, P + 36, yy - 4);
+      const w = x.measureText(p.name).width; x.font = `500 28px ${F}`; x.fillText(r.e.start ? fmtRange(r.e.start, r.e.end) : '', P + 52 + w, yy - 4);
+    } else { x.fillStyle = r.note ? '#8e8e93' : '#333'; x.font = `${r.note ? 'italic ' : ''}400 27px ${F}`; x.fillText((r.note ? '' : '– ') + r.t, P + 36, yy - 6); }
+  });
+  return new Promise(res => cv.toBlob(res, 'image/png'));
+}
+function openShare() {
+  const o = { kind:'thisweek', places:[...ui.filter], tasks:true, notes:false };
+  const rangeOpts = [['thisweek','This week'],['nextweek','Next week'],['thismonth','This month'],['nextmonth','Next month'],['custom','Choose dates…']];
+  showSheet('Share schedule', `
+    <label>Dates</label><select id="sRange">${rangeOpts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+    <div class="row" id="sCustom" style="display:none;margin-top:8px"><input type="date" id="sFrom"><input type="date" id="sTo"></div>
+    <label>Places</label><div class="quick" id="sPlaces">${db.places.map(p => `<button data-p="${esc(p.id)}" class="${!o.places.length || o.places.includes(p.id) ? 'on' : ''}" style="--c:${esc(p.color)}">${esc(p.name)}</button>`).join('')}</div>
+    <label class="chk"><input type="checkbox" id="sTasks" checked><span>Include tasks</span></label>
+    <label class="chk"><input type="checkbox" id="sNotes"><span>Include notes</span></label>
+    <label>Preview</label><pre class="preview" id="sPrev"></pre>
+    <div class="two"><button class="primary" id="sCopy">Copy text</button><button class="secondary" id="sImg" style="margin-top:0">Save as image</button></div>
+    <div class="meta" style="margin-top:8px">Paste the text into WhatsApp or a message, or send the image. It's a snapshot: later changes won't update it.</div>`, null, 'other');
+  const cur = () => {
+    const k = document.getElementById('sRange').value;
+    document.getElementById('sCustom').style.display = k === 'custom' ? '' : 'none';
+    let [from, to] = k === 'custom' ? [document.getElementById('sFrom').value, document.getElementById('sTo').value] : shareRange(k);
+    if (!from || !to) { from = to = todayIso(); } if (to < from) [from, to] = [to, from];
+    const on = [...document.querySelectorAll('#sPlaces .on')].map(b => b.dataset.p);
+    return { from, to, places: on.length === db.places.length ? [] : on, tasks: document.getElementById('sTasks').checked, notes: document.getElementById('sNotes').checked };
+  };
+  const upd = () => { document.getElementById('sPrev').textContent = shareText(cur()).replace(/\*/g, ''); };
+  ['sRange', 'sFrom', 'sTo', 'sTasks', 'sNotes'].forEach(id => document.getElementById(id).addEventListener('input', upd));
+  document.getElementById('sRange').addEventListener('change', upd);
+  document.getElementById('sPlaces').onclick = ev => { const b = ev.target.closest('button'); if (b) { b.classList.toggle('on'); upd(); } };
+  const t = todayIso(); document.getElementById('sFrom').value = t; document.getElementById('sTo').value = addDays(t, 6);
+  upd();
+  document.getElementById('sCopy').onclick = async () => {
+    try { await navigator.clipboard.writeText(shareText(cur())); toast('Copied, now paste it in a message'); }
+    catch (e) { const pre = document.getElementById('sPrev'); const rg = document.createRange(); rg.selectNodeContents(pre); getSelection().removeAllRanges(); getSelection().addRange(rg); toast('Select the text above and copy it'); }
+  };
+  document.getElementById('sImg').onclick = async () => { const o2 = cur(); saveFile(`schedule-${o2.from}.png`, await shareImage(o2), 'image/png'); };
+}
+
 /* ================= Search ================= */
 function openSearch() {
   showSheet('Search', `<input type="search" id="q" placeholder="Patient, task, place, note…" autocomplete="off"><div id="results"></div>`, null, 'other');
@@ -738,6 +935,8 @@ function openSearch() {
   setTimeout(() => q.focus(), 250);
 }
 document.getElementById('searchBtn').onclick = openSearch;
+document.getElementById('shareBtn').onclick = openShare;
+document.getElementById('todoBadge').onclick = openTodo;
 
 /* ================= Reminders ================= */
 function openReminders() {
@@ -756,10 +955,10 @@ function openReminders() {
     <div class="two" style="margin-top:8px"><button class="secondary" id="prAll">Copy Fajr's setting to all</button><button class="primary" id="prSave" style="margin-top:8px">Save prayer reminders</button></div>
 
     <div class="lbl" style="margin-top:24px">Get alerts when the app is closed</div>
-    <div class="box">Reminders pop up here while the app is open. To be alerted when it's closed, add them to your iPhone/iPad Calendar, and repeat after big changes.</div>
+    ${downloadsCap ? `<div class="box">Reminders pop up here while the app is open. Calendar files can't be saved from inside Claude, so to get alerts when the app is closed, ask Claude in chat: <i>"add my reminders for next week to my calendar"</i>.</div>` : `<div class="box">Reminders pop up here while the app is open. To be alerted when it's closed, add them to your iPhone/iPad Calendar, and repeat after big changes.</div>
     <label>Which places</label><select id="xPlace">${placeOpts}<option value="none">None (prayers only)</option></select>
     <label class="chk" style="text-transform:none;letter-spacing:0;font-size:15px;color:inherit"><input type="checkbox" id="xPrayers" ${Object.values(db.prayerRemind).some(v => v != null) ? 'checked' : ''}> Include prayer reminders</label>
-    <button class="secondary" id="rExport">📅 Add next 3 months to Calendar</button>
+    <button class="secondary" id="rExport">📅 Add next 3 months to Calendar</button>`}
     ${perm === 'default' ? '<button class="secondary" id="rPerm">Allow pop-up notifications</button>' : ''}`, null, 'other');
   wirePicker('rWhen');
   const pks = PRAYERS.filter(([k]) => k !== 'sunrise').map(([k]) => k);
@@ -786,7 +985,7 @@ function openReminders() {
       db.places.forEach(p => { if (pid === 'all' || p.id === pid) p.remind = val; });
     });
   };
-  document.getElementById('rExport').onclick = () => exportICS(document.getElementById('xPlace').value, document.getElementById('xPrayers').checked);
+  if (document.getElementById('rExport')) document.getElementById('rExport').onclick = () => exportICS(document.getElementById('xPlace').value, document.getElementById('xPrayers').checked);
   const pb = document.getElementById('rPerm');
   if (pb) pb.onclick = async () => { try { await Notification.requestPermission(); } catch (e) {} openReminders(); };
 }
@@ -830,6 +1029,7 @@ function buildICS(pid, from, days, prayers) {
 async function exportICS(pid, prayers) {
   const { text, n } = buildICS(pid, todayIso(), 92, prayers);
   if (!n) return toast(prayers ? 'Nothing to add: set some reminders first' : 'No items with reminders in the next 3 months');
+  if (downloadsCap) return toast("Calendar files can't be saved from inside Claude. Ask Claude in chat to add your reminders to your phone's calendar.", null, 9000);
   await saveFile('timetable-reminders.ics', text, 'text/calendar');
 }
 
@@ -910,13 +1110,13 @@ document.getElementById('setBtn').onclick = openSettings;
 
 /* ================= Files ================= */
 let downloadsCap = null;
-async function saveFile(name, text, mime) {
+async function saveFile(name, data, mime) {
   if (downloadsCap) {
-    try { await downloadsCap.save({ filename:name, data:text }); return; }
-    catch (e) { toast('Download cancelled'); return; }
+    try { await downloadsCap.save({ filename:name, data }); return true; }
+    catch (e) { toast(e && e.code === 'declined' ? 'Cancelled' : e && e.code === 'rejected_extension' ? "This kind of file can't be saved here" : "Couldn't save the file"); return false; }
   }
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type:mime })); a.download = name;
+  a.href = URL.createObjectURL(data instanceof Blob ? data : new Blob([data], { type:mime })); a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
 }
 
@@ -950,7 +1150,7 @@ async function initCloud() {
     let r; try { r = JSON.parse(snap.data().json); } catch (e) { return; }
     if ((r.updated || 0) > db.updated) {
       db = normalize(r); saveLocal();
-      if (sheetMode === 'day') openDay(sheetDay); else if (!sheetMode) render(); else renderChips();
+      if (sheetMode === 'day') openDay(sheetDay); else if (sheetMode === 'todo') openTodo(); else if (!sheetMode) render(); else renderChips();
     } else if ((r.updated || 0) < db.updated) { pushRemote(); return; }
     if (!snap.metadata.fromCache) setSync('☁︎ Synced');
   }, () => { clearTimeout(timer); remoteRef = null; setSync('Saved on this device'); });
