@@ -169,7 +169,15 @@
   .prayers div.next { outline:2px solid var(--prayer); }
 
   .entry { background:var(--soft); border-radius:12px; padding:10px 12px; margin-bottom:10px; border-left:6px solid #999; }
-  .entry { cursor:pointer; }
+  .entry { cursor:pointer; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; transition:transform .15s ease; }
+  .entry.pressing { transform:scale(.98); }
+  .menu { display:flex; flex-direction:column; background:var(--soft); border-radius:14px; overflow:hidden; }
+  .menu button { display:flex; align-items:center; gap:12px; border:none; background:none; color:var(--text); padding:12px 14px; text-align:left; cursor:pointer; border-bottom:1px solid var(--line); }
+  .menu button:last-child { border-bottom:none; }
+  .menu .mi { width:28px; text-align:center; font-size:18px; }
+  .menu .mt { flex:1; display:flex; flex-direction:column; } .menu .mt b { font-weight:600; font-size:16px; } .menu .mt small { color:var(--muted); font-size:13px; }
+  .menu .chev { color:var(--muted); font-size:20px; }
+  .menu .del .mt b { color:#ff3b30; }
   .entry .chk { cursor:default; }
   .entry .chk input { cursor:pointer; }
   input[type=time] { min-width:0; display:block; -webkit-appearance:none; appearance:none; min-height:44px; }
@@ -929,6 +937,7 @@ function openDay(date) {
   // Tap anywhere on a place card to edit it; only the checkbox itself ticks a task
   body.querySelectorAll('[data-edit]').forEach(el => el.onclick = ev => { if (ev.target.closest('input[type=checkbox]')) return; openEditor(date, el.dataset.edit); });
   body.querySelectorAll('.chk input').forEach(cb => cb.addEventListener('click', ev => ev.stopPropagation()));
+  body.querySelectorAll('[data-edit]').forEach(el => bindLongPress(el, () => itemMenu(date, el.dataset.edit)));
   body.querySelectorAll('.chk input').forEach(cb => cb.onchange = () => {
     const e = db.entries.find(x => x.id === cb.dataset.e), i = +cb.dataset.i, s = doneSet(e, date);
     cb.checked ? s.add(i) : s.delete(i);
@@ -1081,13 +1090,7 @@ function openEditor(date, id) {
   };
 
   if (!orig) return;
-  document.getElementById('fDelete').onclick = () => {
-    if (orig.repeat) seriesScope('delete', orig, date, null);
-    else ask('Delete', `Delete <b>${esc(place(orig.placeId).name)} ${fmtRange(orig.start, orig.end)}</b> on ${shortDate(date)}?`, [
-      { label:'Delete', cls:'danger', fn:() => withUndo('Deleted', () => { db.entries = db.entries.filter(x => x !== orig); }, () => openDay(date)) },
-      { label:'Cancel', fn:() => openEditor(date, id) },
-    ], () => openEditor(date, id));
-  };
+  document.getElementById('fDelete').onclick = () => confirmDelete(date, orig, () => openEditor(date, id));
   document.getElementById('fCopy').onclick = () => openTransfer(date, orig, 'copy');
   document.getElementById('fMove').onclick = () => openTransfer(date, orig, 'move');
 }
@@ -1112,9 +1115,9 @@ function splitSeries(orig, from, to, data) {
   const idx = db.entries.indexOf(orig);
   db.entries.splice(idx, 1, ...out.filter(e => !e.repeat || !e.repeat.until || e.repeat.until >= e.date));
 }
-function seriesScope(kind, orig, date, data) {
+function seriesScope(kind, orig, date, data, backTo) {
   const del = kind === 'delete', name = esc(place(orig.placeId).name);
-  const back = () => openEditor(date, orig.id), done = () => openDay(date);
+  const back = backTo || (() => openEditor(date, orig.id)), done = () => openDay(date);
   const dayOnly = () => withUndo(del ? 'Removed from this day' : 'Changed for this day', () => {
     orig.extra = orig.extra.filter(d => d !== date);
     if (occurs(orig, date)) orig.skip.push(date);
@@ -1151,8 +1154,115 @@ function findClashes(date, item, except) {
   const end = x => toMin(x.end) > toMin(x.start) ? toMin(x.end) : toMin(x.start) + 60;
   return entriesFor(date, true).filter(x => x !== except && x.start && toMin(x.start) < end(item) && toMin(item.start) < end(x));
 }
+function confirmDelete(date, orig, back) {
+  if (orig.repeat) return seriesScope('delete', orig, date, null, back);
+  ask('Delete', `Delete <b>${esc(place(orig.placeId).name)} ${fmtRange(orig.start, orig.end)}</b> on ${shortDate(date)}?`, [
+    { label:'Delete', cls:'danger', fn:() => withUndo('Deleted', () => { db.entries = db.entries.filter(x => x !== orig); }, () => openDay(date)) },
+    { label:'Cancel', fn:back },
+  ], back);
+}
+
+/* ===== Long-press menu on a place card ===== */
+function bindLongPress(el, fn) {
+  let t = null, sx = 0, sy = 0, fired = false;
+  const cancel = () => { clearTimeout(t); t = null; el.classList.remove('pressing'); };
+  el.addEventListener('pointerdown', ev => {
+    if (ev.target.closest('input')) return;
+    fired = false; sx = ev.clientX; sy = ev.clientY; el.classList.add('pressing');
+    t = setTimeout(() => { fired = true; el.classList.remove('pressing'); try { navigator.vibrate && navigator.vibrate(15); } catch (e) {} fn(); }, 480);
+  });
+  el.addEventListener('pointermove', ev => { if (t && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 10) cancel(); });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(n => el.addEventListener(n, cancel));
+  el.addEventListener('click', ev => { if (fired) { ev.stopImmediatePropagation(); ev.preventDefault(); fired = false; } }, true);
+  el.addEventListener('contextmenu', ev => { ev.preventDefault(); if (!fired) { cancel(); fn(); } });
+}
+function itemMenu(date, id) {
+  const e = db.entries.find(x => x.id === id); if (!e) return;
+  const p = place(e.placeId), back = () => itemMenu(date, id);
+  const opts = [
+    ['notes', '📝', 'View notes', e.note ? esc(e.note.length > 40 ? e.note.slice(0, 40) + '…' : e.note) : 'No notes yet'],
+    ['remind', '🔔', 'Set reminder', remindLabel(e.remind)],
+    ['repeat', '↻', 'Repeat', e.repeat ? repeatText(e.repeat) : 'Doesn\'t repeat'],
+    ['copy', '⧉', 'Copy to…', 'Another day'],
+    ['move', '➜', 'Move to…', 'Another day'],
+    ['delete', '🗑', 'Delete', e.repeat ? 'This day or more' : 'Remove this item'],
+  ];
+  showSheet(p.name, `<div class="meta" style="margin-bottom:8px">${longDate(date)}${e.start ? ' · <span class="tm">' + fmtRange(e.start, e.end) + '</span>' : ''}</div>
+    <div class="menu">${opts.map(([k, ic, t, sub]) => `<button data-m="${k}" class="${k === 'delete' ? 'del' : ''}"><span class="mi">${ic}</span><span class="mt"><b>${t}</b><small>${sub}</small></span><span class="chev">›</span></button>`).join('')}</div>`,
+    () => openDay(date), 'other');
+  body.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
+    const k = b.dataset.m;
+    if (k === 'notes') return itemNotes(date, e, back);
+    if (k === 'remind') return itemReminder(date, e, back);
+    if (k === 'repeat') return itemRepeat(date, e, back);
+    if (k === 'copy' || k === 'move') return openTransfer(date, e, k, back);
+    if (k === 'delete') return confirmDelete(date, e, back);
+  });
+}
+function itemNotes(date, e, back) {
+  showSheet('Notes', `<div class="meta">${esc(place(e.placeId).name)} · ${shortDate(date)}${e.repeat ? ' · notes are shared by every day of this repeating item' : ''}</div>
+    <textarea id="nText" style="min-height:160px;margin-top:10px" placeholder="No notes yet. Type here to add some.">${esc(e.note)}</textarea>
+    <div style="height:12px"></div><button class="primary" id="nSave">Save notes</button>`, back, 'other');
+  document.getElementById('nSave').onclick = () => {
+    const v = document.getElementById('nText').value.trim();
+    if (v === (e.note || '')) return back();
+    withUndo('Notes saved', () => { e.note = v; }, back);
+  };
+}
+function itemReminder(date, e, back) {
+  showSheet('Set reminder', `<div class="meta">${esc(place(e.placeId).name)}${e.start ? ' starts at ' + fmtTime(e.start) : ' has no start time, so reminders use 8am'}${e.repeat ? '. This applies to every day it repeats.' : '.'}</div>
+    <label>Remind me</label>${remindPicker('irWhen', e.remind)}
+    <div style="height:14px"></div><button class="primary" id="irSave">Save reminder</button>`, back, 'other');
+  wirePicker('irWhen');
+  document.getElementById('irSave').onclick = () => {
+    const v = readPicker('irWhen'); if (v === undefined) return toast('Type how long before you want the reminder');
+    withUndo(`Reminder: ${remindLabel(v)}`, () => { e.remind = v; }, back);
+  };
+}
+function itemRepeat(date, e, back) {
+  const r = e.repeat || { freq:'none', days:[parse(date).getDay()], until:'' };
+  showSheet('Repeat', `<div class="meta">${esc(place(e.placeId).name)}${e.start ? ' · ' + fmtRange(e.start, e.end) : ''}</div>
+    <label>Repeat</label>
+    <select id="rpFreq">
+      <option value="none">Never (this day only)</option><option value="daily">Every day</option>
+      <option value="weekly">Every week / every few weeks on…</option><option value="monthly">Every month (same date)</option>
+      <option value="monthNth">Every month on certain weeks (e.g. 1st & 3rd Sun)</option>
+    </select>
+    <div id="rpBox">
+      <div id="rpEveryWrap" class="row" style="margin-top:8px;align-items:center"><span style="flex:none">Repeat</span>
+        <select id="rpEvery">${[[1,'every week'],[2,'every other week (one yes, one no)'],[3,'every 3 weeks'],[4,'every 4 weeks']].map(([v, l]) => `<option value="${v}" ${(r.every || 1) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div id="rpNthWrap"><div class="lbl">Which weeks of the month</div><div class="days" id="rpNth">${NTH.map(([k, l]) => `<button data-n="${k}" class="${(r.nths || [Math.ceil(parse(date).getDate() / 7)]).includes(k) ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+      <div id="rpDaysWrap"><div class="days" id="rpDays" style="margin-top:8px">${DAYS.map((d, i) => `<button data-dow="${COL2DOW[i]}" class="${(r.days || []).includes(COL2DOW[i]) ? 'on' : ''}">${d}</button>`).join('')}</div></div>
+      <div class="lbl">Until (optional)</div><input type="date" id="rpUntil" value="${esc(r.until || '')}">
+    </div>
+    <div style="height:14px"></div><button class="primary" id="rpSave">Save</button>`, back, 'other');
+  const f = document.getElementById('rpFreq'); f.value = e.repeat ? e.repeat.freq : 'none';
+  const sync = () => {
+    document.getElementById('rpBox').style.display = f.value === 'none' ? 'none' : '';
+    document.getElementById('rpDaysWrap').style.display = ['weekly', 'monthNth'].includes(f.value) ? '' : 'none';
+    document.getElementById('rpEveryWrap').style.display = f.value === 'weekly' ? '' : 'none';
+    document.getElementById('rpNthWrap').style.display = f.value === 'monthNth' ? '' : 'none';
+  };
+  f.onchange = sync; sync();
+  ['rpDays', 'rpNth'].forEach(id => document.getElementById(id).onclick = ev => { const b = ev.target.closest('button'); if (b) b.classList.toggle('on'); });
+  document.getElementById('rpSave').onclick = () => {
+    const v = f.value;
+    const rep = v === 'none' ? null : { freq:v, until:document.getElementById('rpUntil').value,
+      anchor: (e.repeat && (e.repeat.anchor || e.date)) || date,
+      every: v === 'weekly' ? +document.getElementById('rpEvery').value : 1,
+      nths: v === 'monthNth' ? [...document.querySelectorAll('#rpNth .on')].map(b => +b.dataset.n) : [],
+      days: ['weekly', 'monthNth'].includes(v) ? [...document.querySelectorAll('#rpDays .on')].map(b => +b.dataset.dow) : [] };
+    if (rep && ['weekly', 'monthNth'].includes(v) && !rep.days.length) return toast('Pick at least one day to repeat on');
+    if (rep && v === 'monthNth' && !rep.nths.length) return toast('Pick which weeks of the month');
+    const data = { placeId:e.placeId, start:e.start, end:e.end, tasks:[...e.tasks], taskTimes:[...(e.taskTimes || [])], note:e.note, remind:e.remind, repeat:rep };
+    if (e.repeat) return seriesScope('edit', e, date, data, back);
+    withUndo(rep ? `Repeats: ${repeatText(rep)}` : 'Saved', () => { e.repeat = rep; e.date = date; }, () => openDay(date));
+  };
+}
+
 /* ===== Copy / move: pick a day, confirm, then Undo is available ===== */
-function openTransfer(from, e, kind) {
+function openTransfer(from, e, kind, backTo) {
+  const goBack = backTo || (() => openEditor(from, e.id));
   const p = place(e.placeId), verb = kind === 'copy' ? 'Copy' : 'Move';
   const summary = `<b style="color:${esc(p.color)}">${esc(p.name)}</b> <span class="tm">${fmtRange(e.start, e.end)}</span>` +
     (e.tasks.length ? `<br>${e.tasks.map(esc).join(', ')}` : '');
@@ -1163,7 +1273,7 @@ function openTransfer(from, e, kind) {
     ${e.repeat ? `<div class="meta" style="margin-top:8px">This is a repeating item: only ${shortDate(from)} is ${kind === 'copy' ? 'copied' : 'moved'}. The rest of the series stays as it is.</div>` : ''}
     <div style="height:14px"></div>
     <button class="primary" id="tGo" disabled>Choose a day first</button>
-    <button class="secondary" id="tCancel">Cancel</button>`, () => openEditor(from, e.id), 'other');
+    <button class="secondary" id="tCancel">Cancel</button>`, goBack, 'other');
   const inp = document.getElementById('tDate'), go = document.getElementById('tGo'), chk = document.getElementById('tCheck');
   const endMin = x => toMin(x.end) ?? toMin(x.start) + 60;
   inp.oninput = () => {
@@ -1174,7 +1284,7 @@ function openTransfer(from, e, kind) {
       (clash.length ? `<div class="warn" style="margin-top:6px">⚠️ Overlaps with ${clash.map(x => esc(place(x.placeId).name) + ' ' + fmtRange(x.start, x.end)).join(', ')}</div>` : '');
     go.disabled = false; go.textContent = `Yes, ${verb.toLowerCase()} to ${shortDate(to)}`;
   };
-  document.getElementById('tCancel').onclick = () => openEditor(from, e.id);
+  document.getElementById('tCancel').onclick = goBack;
   go.onclick = () => {
     const to = inp.value; if (!to || to === from) return;
     withUndo(`${kind === 'copy' ? 'Copied' : 'Moved'} to ${shortDate(to)}`, () => {
