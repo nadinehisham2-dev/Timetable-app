@@ -146,6 +146,8 @@
   .place-row input[type=color] { width:42px; height:36px; padding:2px; flex:none; }
   .box { background:var(--soft); border-radius:12px; padding:12px; margin-top:10px; font-size:15px; line-height:1.45; }
   .warn { color:var(--accent); font-weight:600; }
+  .prow { display:grid; grid-template-columns:72px 1fr; align-items:start; gap:8px; padding:6px 0; }
+  .prow b { padding-top:11px; color:var(--prayer); }
   .res { padding:10px 0; border-bottom:1px solid var(--line); cursor:pointer; }
   .res small { color:var(--muted); display:block; }
 
@@ -204,6 +206,7 @@ function normalize(d) {
   d.entries = (d.entries || []).map(e => ({ tasks:[], note:'', start:'', end:'', remind:null, repeat:null,
     skip:[], extra:[], done:{}, ...e }));
   d.places.forEach(p => { if (p.remind === undefined) p.remind = null; });
+  d.prayerRemind = d.prayerRemind || {};
   d.updated = d.updated || 0;
   return d;
 }
@@ -242,8 +245,46 @@ function fmtRange(s, e) {
 }
 const longDate = s => parse(s).toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
 const shortDate = s => parse(s).toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' });
-const remindLabel = m => m == null ? 'No reminder' : m === 0 ? 'At start time' : m === 1440 ? '1 day before' : m === 60 ? '1 hour before' : `${m} min before`;
-const REMIND_OPTS = [null, 0, 10, 30, 60, 1440];
+const UNITS = [[10080,'week'],[1440,'day'],[60,'hour'],[1,'min']];
+function remindLabel(m, zero = 'At start time') {
+  if (m == null) return 'No reminder';
+  if (m === 0) return zero;
+  for (const [u, n] of UNITS) if (m % u === 0) { const k = m / u; return `${k} ${n}${k > 1 && n !== 'min' ? 's' : ''} before`; }
+}
+const REMIND_OPTS = [null, 0, 5, 10, 15, 30, 60, 120, 1440, 2880, 10080];
+const PRAYER_OPTS = [null, 0, 5, 10, 15, 20, 30];
+// Reminder picker: preset list + "Custom…" (number + minutes/hours/days/weeks)
+function remindPicker(id, val, presets = REMIND_OPTS, zero) {
+  const custom = val != null && !presets.includes(val);
+  let n = '', u = 1;
+  if (custom) for (const [unit] of UNITS) if (val % unit === 0) { n = val / unit; u = unit; break; }
+  return `<select id="${id}" class="rp">${presets.map(o => `<option value="${o}" ${!custom && o === val ? 'selected' : ''}>${remindLabel(o, zero)}</option>`).join('')}
+      <option value="custom" ${custom ? 'selected' : ''}>Custom…</option></select>
+    <div id="${id}C" class="row" style="margin-top:8px;${custom ? '' : 'display:none'}">
+      <input type="number" inputmode="numeric" min="1" id="${id}N" value="${n}" placeholder="e.g. 3">
+      <select id="${id}U">${[[1,'minutes'],[60,'hours'],[1440,'days'],[10080,'weeks']].map(([v, l]) => `<option value="${v}" ${v === u ? 'selected' : ''}>${l} before</option>`).join('')}</select>
+    </div>`;
+}
+function wirePicker(id) {
+  const sel = document.getElementById(id);
+  sel.addEventListener('change', () => {
+    const c = sel.value === 'custom';
+    document.getElementById(id + 'C').style.display = c ? '' : 'none';
+    if (c) document.getElementById(id + 'N').focus();
+  });
+}
+function readPicker(id) {   // null = none, number = minutes, undefined = invalid custom value
+  const v = document.getElementById(id).value;
+  if (v === 'null') return null;
+  if (v !== 'custom') return +v;
+  const n = parseFloat(document.getElementById(id + 'N').value);
+  if (!(n > 0)) return undefined;
+  return Math.round(n * +document.getElementById(id + 'U').value);
+}
+const setPicker = (id, val, presets = REMIND_OPTS) => {
+  const sel = document.getElementById(id);
+  if (val == null || presets.includes(val)) { sel.value = String(val); document.getElementById(id + 'C').style.display = 'none'; }
+};
 
 /* ================= Repeats ================= */
 function occurs(e, date) {
@@ -471,7 +512,7 @@ function openDay(date) {
   sheetDay = date;
   const pt = prayerTimes(date), np = nextPrayer();
   let html = '<div class="prayers">' + PRAYERS.map(([k, n]) =>
-    `<div class="${np && np.date === date && np.k === k ? 'next' : ''}">${n}<b>${fmtTime(pt[k])}</b></div>`).join('') + '</div>';
+    `<div class="${np && np.date === date && np.k === k ? 'next' : ''}">${n}${db.prayerRemind[k] != null ? ' 🔔' : ''}<b>${fmtTime(pt[k])}</b></div>`).join('') + '</div>';
   const list = entriesFor(date, true);
   if (!list.length) html += '<div class="empty-msg">Nothing planned yet.</div>';
   list.forEach(e => {
@@ -535,7 +576,7 @@ function openEditor(date, id) {
     <button class="add-small" id="fAddTask">+ Add task</button>
     <label>Notes</label><textarea id="fNote" placeholder="Optional">${esc(e.note)}</textarea>
     <label>Reminder</label>
-    <select id="fRemind">${REMIND_OPTS.map(o => `<option value="${o}" ${o === e.remind ? 'selected' : ''}>${remindLabel(o)}</option>`).join('')}</select>
+    ${remindPicker('fRemind', e.remind)}
     <label>Repeat</label>
     <select id="fFreq">
       <option value="none">Never (this day only)</option><option value="daily">Every day</option>
@@ -567,12 +608,12 @@ function openEditor(date, id) {
     document.getElementById('fRepeatBox').style.display = freq.value === 'none' ? 'none' : '';
     document.getElementById('fDaysWrap').style.display = freq.value === 'weekly' ? '' : 'none';
   };
-  freq.onchange = syncRepeatUI; syncRepeatUI();
+  freq.onchange = syncRepeatUI; syncRepeatUI(); wirePicker('fRemind');
   document.getElementById('fDays').onclick = ev => { const b = ev.target.closest('button'); if (b) b.classList.toggle('on'); };
 
   const sel = document.getElementById('fPlace');
   sel.onchange = () => {
-    if (sel.value !== '__new' && !orig) document.getElementById('fRemind').value = String(place(sel.value).remind);
+    if (sel.value !== '__new' && !orig) setPicker('fRemind', place(sel.value).remind);
   };
   sel.addEventListener('change', () => {
     document.getElementById('fNewPlace').style.display = sel.value === '__new' ? '' : 'none';
@@ -580,11 +621,11 @@ function openEditor(date, id) {
   });
 
   const readForm = () => {
-    const f = freq.value, rem = document.getElementById('fRemind').value;
+    const f = freq.value;
     return {
       placeId: sel.value, start: document.getElementById('fStart').value, end: document.getElementById('fEnd').value,
       tasks: [...tasksEl.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean),
-      note: document.getElementById('fNote').value.trim(), remind: rem === 'null' ? null : +rem,
+      note: document.getElementById('fNote').value.trim(), remind: readPicker('fRemind'),
       repeat: f === 'none' ? null : { freq:f, until:document.getElementById('fUntil').value,
         days: f === 'weekly' ? [...document.querySelectorAll('#fDays .on')].map(b => +b.dataset.dow) : [] }
     };
@@ -601,6 +642,7 @@ function openEditor(date, id) {
     }
     const data = readForm();
     if (!data.placeId) return toast('Choose a place');
+    if (data.remind === undefined) return toast('Type how long before you want the reminder');
     if (data.repeat && data.repeat.freq === 'weekly' && !data.repeat.days.length) return toast('Pick at least one day to repeat on');
     if (!orig) {
       withUndo('Added', () => db.entries.push({ ...e, ...data, id:uid(), date }), () => openDay(date));
@@ -704,24 +746,47 @@ function openReminders() {
   showSheet('Reminders', `
     <div class="meta">To remind you of one item only, open it and pick a reminder in Edit. Use this to set reminders for many items at once.</div>
     <label>Set reminders for</label><select id="rPlace">${placeOpts}</select>
-    <label>Remind me</label><select id="rWhen">${REMIND_OPTS.map(o => `<option value="${o}" ${o === 30 ? 'selected' : ''}>${remindLabel(o)}</option>`).join('')}</select>
+    <label>Remind me</label>${remindPicker('rWhen', 30)}
     <div style="height:12px"></div>
     <button class="primary" id="rApply">Apply</button>
     <div class="meta" style="margin-top:6px">Applies to everything already planned for that place, and to new items you add there.</div>
 
+    <div class="lbl" style="margin-top:24px">🕌 Prayer reminders</div>
+    ${PRAYERS.filter(([k]) => k !== 'sunrise').map(([k, n]) => `<div class="prow"><b>${n}</b><div>${remindPicker('pr_' + k, db.prayerRemind[k] ?? null, PRAYER_OPTS, 'At adhan time')}</div></div>`).join('')}
+    <div class="two" style="margin-top:8px"><button class="secondary" id="prAll">Copy Fajr's setting to all</button><button class="primary" id="prSave" style="margin-top:8px">Save prayer reminders</button></div>
+
     <div class="lbl" style="margin-top:24px">Get alerts when the app is closed</div>
     <div class="box">Reminders pop up here while the app is open. To be alerted when it's closed, add them to your iPhone/iPad Calendar, and repeat after big changes.</div>
-    <label>Which places</label><select id="xPlace">${placeOpts}</select>
+    <label>Which places</label><select id="xPlace">${placeOpts}<option value="none">None (prayers only)</option></select>
+    <label class="chk" style="text-transform:none;letter-spacing:0;font-size:15px;color:inherit"><input type="checkbox" id="xPrayers" ${Object.values(db.prayerRemind).some(v => v != null) ? 'checked' : ''}> Include prayer reminders</label>
     <button class="secondary" id="rExport">📅 Add next 3 months to Calendar</button>
     ${perm === 'default' ? '<button class="secondary" id="rPerm">Allow pop-up notifications</button>' : ''}`, null, 'other');
+  wirePicker('rWhen');
+  const pks = PRAYERS.filter(([k]) => k !== 'sunrise').map(([k]) => k);
+  pks.forEach(k => wirePicker('pr_' + k));
+  document.getElementById('prAll').onclick = () => {
+    const src = document.getElementById('pr_fajr');
+    pks.forEach(k => {
+      document.getElementById('pr_' + k).value = src.value;
+      document.getElementById('pr_' + k + 'C').style.display = src.value === 'custom' ? '' : 'none';
+      document.getElementById('pr_' + k + 'N').value = document.getElementById('pr_fajrN').value;
+      document.getElementById('pr_' + k + 'U').value = document.getElementById('pr_fajrU').value;
+    });
+  };
+  document.getElementById('prSave').onclick = () => {
+    const vals = {}; for (const k of pks) { const v = readPicker('pr_' + k); if (v === undefined) return toast('Type how many minutes before'); vals[k] = v; }
+    withUndo('Prayer reminders saved', () => { db.prayerRemind = vals; });
+    document.getElementById('xPrayers').checked = Object.values(vals).some(v => v != null);
+  };
   document.getElementById('rApply').onclick = () => {
-    const pid = document.getElementById('rPlace').value, v = document.getElementById('rWhen').value, val = v === 'null' ? null : +v;
+    const pid = document.getElementById('rPlace').value, val = readPicker('rWhen');
+    if (val === undefined) return toast('Type how long before you want the reminder');
     withUndo(`Reminders set: ${remindLabel(val)}`, () => {
       db.entries.forEach(e => { if (pid === 'all' || e.placeId === pid) e.remind = val; });
       db.places.forEach(p => { if (pid === 'all' || p.id === pid) p.remind = val; });
     });
   };
-  document.getElementById('rExport').onclick = () => exportICS(document.getElementById('xPlace').value);
+  document.getElementById('rExport').onclick = () => exportICS(document.getElementById('xPlace').value, document.getElementById('xPrayers').checked);
   const pb = document.getElementById('rPerm');
   if (pb) pb.onclick = async () => { try { await Notification.requestPermission(); } catch (e) {} openReminders(); };
 }
@@ -729,14 +794,14 @@ document.getElementById('remBtn').onclick = openReminders;
 
 const icsEsc = s => String(s || '').replace(/\\/g, '\\\\').replace(/[,;]/g, m => '\\' + m).replace(/\n/g, '\\n');
 const fmtHM = m => `${pad(Math.min(23, Math.floor(m / 60)))}:${pad(m % 60)}`;
-function buildICS(pid, from, days) {
+function buildICS(pid, from, days, prayers) {
   const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Timetable//EN', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Timetable'];
   let n = 0;
   for (let i = 0; i < days; i++) {
     const date = addDays(from, i), ymd = date.replace(/-/g, '');
     entriesFor(date, true).forEach(e => {
-      if (e.remind == null || (pid !== 'all' && e.placeId !== pid)) return;
+      if (e.remind == null || pid === 'none' || (pid !== 'all' && e.placeId !== pid)) return;
       const p = place(e.placeId);
       lines.push('BEGIN:VEVENT', `UID:${e.id}-${ymd}@timetable`, `DTSTAMP:${stamp}`);
       if (e.start) {
@@ -747,26 +812,52 @@ function buildICS(pid, from, days) {
         'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsEsc(p.name)}`, `TRIGGER:-PT${e.remind}M`, 'END:VALARM', 'END:VEVENT');
       n++;
     });
+    if (prayers) {
+      const pt = prayerTimes(date);
+      PRAYERS.forEach(([k, name]) => {
+        const m = db.prayerRemind[k]; if (m == null) return;
+        const t = pt[k].replace(':', '');
+        lines.push('BEGIN:VEVENT', `UID:prayer-${k}-${ymd}@timetable`, `DTSTAMP:${stamp}`,
+          `DTSTART;TZID=Africa/Cairo:${ymd}T${t}00`, `DTEND;TZID=Africa/Cairo:${ymd}T${t}00`, `SUMMARY:🕌 ${name}`,
+          'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${name}`, `TRIGGER:-PT${m}M`, 'END:VALARM', 'END:VEVENT');
+        n++;
+      });
+    }
   }
   lines.push('END:VCALENDAR');
   return { text: lines.join('\r\n'), n };
 }
-async function exportICS(pid) {
-  const { text, n } = buildICS(pid, todayIso(), 92);
-  if (!n) return toast('No items with reminders in the next 3 months');
+async function exportICS(pid, prayers) {
+  const { text, n } = buildICS(pid, todayIso(), 92, prayers);
+  if (!n) return toast(prayers ? 'Nothing to add: set some reminders first' : 'No items with reminders in the next 3 months');
   await saveFile('timetable-reminders.ics', text, 'text/calendar');
 }
 
 const fired = new Set();
 function checkReminders() {
   const now = Date.now();
-  [todayIso(), addDays(todayIso(), 1)].forEach(date => entriesFor(date, true).forEach(e => {
+  const maxDays = Math.min(60, Math.ceil(Math.max(0, ...db.entries.map(e => e.remind || 0)) / 1440) + 1);
+  for (let off = 0; off <= 1; off++) {
+    const date = addDays(todayIso(), off), pt = prayerTimes(date);
+    PRAYERS.forEach(([k, name]) => {
+      const m = db.prayerRemind[k]; if (m == null) return;
+      const d = parse(date); d.setMinutes(toMin(pt[k])); const at = d.getTime() - m * 60000, key = 'pr' + k + date + m;
+      if (now >= at && now < at + 15 * 60000 && !fired.has(key)) {
+        fired.add(key);
+        const msg = m ? `🕌 ${name} in ${remindLabel(m).replace(' before', '')} (${fmtTime(pt[k])})` : `🕌 It's time for ${name}`;
+        toast(msg, null, 15000);
+        try { if ('Notification' in window && Notification.permission === 'granted') new Notification(msg); } catch (er) {}
+      }
+    });
+  }
+  [...Array(maxDays + 1)].map((_, i) => addDays(todayIso(), i)).forEach(date => entriesFor(date, true).forEach(e => {
     if (e.remind == null) return;
     const d = parse(date); d.setMinutes(toMin(e.start) ?? 8 * 60);
     const at = d.getTime() - e.remind * 60000, key = e.id + date + e.remind;
     if (now >= at && now < at + 15 * 60000 && !fired.has(key)) {
       fired.add(key);
-      const msg = `⏰ ${place(e.placeId).name}${e.start ? ' at ' + fmtTime(e.start) : ''}${date !== todayIso() ? ' tomorrow' : ''}`;
+      const days = Math.round((parse(date) - parse(todayIso())) / 864e5);
+      const msg = `⏰ ${place(e.placeId).name}${e.start ? ' at ' + fmtTime(e.start) : ''}${days === 1 ? ' tomorrow' : days > 1 ? ' on ' + shortDate(date) : ''}`;
       toast(msg, null, 15000);
       try { if ('Notification' in window && Notification.permission === 'granted') new Notification(msg, { body: e.tasks.join(', ') }); } catch (er) {}
     }
