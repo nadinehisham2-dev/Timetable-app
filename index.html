@@ -77,6 +77,13 @@
   .chip { flex:none; border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:16px;
     padding:4px 11px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:5px; }
   .chip.on { border-color:transparent; background:var(--text); color:var(--bg); }
+  .chip.addp { font-size:18px; font-weight:600; padding:2px 12px; color:var(--accent); border-style:dashed; line-height:1.2; }
+  .swatches { display:flex; flex-wrap:wrap; gap:10px; }
+  .swatches button, .swcustom { width:34px; height:34px; border-radius:50%; border:3px solid var(--sheet); box-shadow:0 0 0 1px var(--line); cursor:pointer; padding:0; }
+  .swatches button.on { box-shadow:0 0 0 2px var(--text); }
+  .swcustom { display:flex; align-items:center; justify-content:center; background:var(--soft); color:var(--muted); font-size:16px; position:relative; overflow:hidden; text-transform:none; margin:0; }
+  .swcustom input { position:absolute; inset:0; opacity:0; width:100%; height:100%; cursor:pointer; }
+  .np-prev { margin-top:14px; } .np-prev .chip { display:inline-flex; cursor:default; }
   .chip .dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
 
   /* Month */
@@ -575,10 +582,38 @@ const main = document.getElementById('main');
 function renderChips() {
   const el = document.getElementById('chips');
   el.innerHTML = `<button class="chip ${ui.filter.length ? '' : 'on'}" data-p="">All</button>` +
-    db.places.map(p => `<button class="chip ${ui.filter.includes(p.id) ? 'on' : ''}" data-p="${esc(p.id)}"><span class="dot" style="background:${esc(p.color)}"></span>${esc(p.name)}</button>`).join('');
+    db.places.map(p => `<button class="chip ${ui.filter.includes(p.id) ? 'on' : ''}" data-p="${esc(p.id)}"><span class="dot" style="background:${esc(p.color)}"></span>${esc(p.name)}</button>`).join('') +
+    `<button class="chip addp" id="addPlace" aria-label="Add a place" title="Add a place">+</button>`;
+}
+const PLACE_COLORS = ['#2a9d8f','#3b5bdb','#e8590c','#d6336c','#7048e8','#2f9e44','#f08c00','#1098ad','#c92a2a','#495057'];
+function openNewPlace() {
+  const used = db.places.map(p => p.color);
+  const first = PLACE_COLORS.find(c => !used.includes(c)) || PLACE_COLORS[db.places.length % PLACE_COLORS.length];
+  showSheet('New place', `<label>Name</label><input type="text" id="npName" placeholder="e.g. Hospital, Library, Home" autocomplete="off">
+    <label>Colour</label><div class="swatches" id="npCols">${PLACE_COLORS.map(c => `<button data-c="${c}" style="background:${c}" class="${c === first ? 'on' : ''}" aria-label="Colour"></button>`).join('')}
+      <label class="swcustom" title="Pick any colour"><input type="color" id="npCustom" value="${first}">＋</label></div>
+    <div class="np-prev" id="npPrev"></div>
+    <div style="height:14px"></div><button class="primary" id="npSave">Add place</button>
+    <div class="meta" style="margin-top:8px">You can rename, recolour or delete places any time in ⚙️ Settings.</div>`, null, 'other');
+  let color = first;
+  const name = document.getElementById('npName'), prev = document.getElementById('npPrev');
+  const upd = () => { prev.innerHTML = `<span class="chip"><span class="dot" style="background:${esc(color)}"></span>${esc(name.value.trim() || 'New place')}</span>`; };
+  document.getElementById('npCols').onclick = ev => { const b = ev.target.closest('button[data-c]'); if (!b) return; color = b.dataset.c;
+    document.querySelectorAll('#npCols button').forEach(x => x.classList.toggle('on', x === b)); upd(); };
+  document.getElementById('npCustom').oninput = ev => { color = ev.target.value; document.querySelectorAll('#npCols button').forEach(x => x.classList.remove('on')); upd(); };
+  name.oninput = upd; upd();
+  const save = () => {
+    const n = name.value.trim(); if (!n) return toast('Type a name for the place');
+    if (db.places.some(p => p.name.toLowerCase() === n.toLowerCase())) return toast(`"${n}" already exists`);
+    withUndo(`Added ${n}`, () => db.places.push({ id:uid(), name:n, color, remind:null }), closeSheet);
+  };
+  document.getElementById('npSave').onclick = save;
+  name.addEventListener('keydown', ev => { if (ev.key === 'Enter') save(); });
+  setTimeout(() => name.focus(), 250);
 }
 document.getElementById('chips').onclick = e => {
   const b = e.target.closest('.chip'); if (!b) return;
+  if (b.id === 'addPlace') return openNewPlace();
   const id = b.dataset.p;
   if (!id) ui.filter = [];
   else ui.filter = ui.filter.includes(id) ? ui.filter.filter(x => x !== id) : [...ui.filter, id];
