@@ -49,6 +49,8 @@
   .btn-link { background:none; border:none; color:var(--accent); font-size:17px; padding:6px 8px; cursor:pointer; }
   .icon-btn { background:none; border:none; color:var(--accent); font-size:20px; padding:4px 8px; cursor:pointer; line-height:1; }
   .spacer { flex:1; }
+  .hist { font-size:22px; padding:4px 7px; }
+  .hist:disabled { opacity:.25; cursor:default; }
   /* Phone turned sideways (short screen): let the whole page scroll, taller day boxes */
   @media (max-height:500px) {
     html, body { height:auto; overflow:visible; }
@@ -216,7 +218,11 @@
 <header>
   <div class="row1">
     <div class="title"><b id="mName"></b> <span id="yName"></span></div>
-    <button class="btn-link" id="today">Today</button>
+    <div style="display:flex;align-items:center;gap:2px">
+      <button class="icon-btn hist" id="undoBtn" aria-label="Undo" title="Undo" disabled>↶</button>
+      <button class="icon-btn hist" id="redoBtn" aria-label="Redo" title="Redo" disabled>↷</button>
+      <button class="btn-link" id="today">Today</button>
+    </div>
   </div>
   <div class="row2">
     <div class="seg"><button id="vMonth" class="on">Month</button><button id="vWeek">Week</button></div>
@@ -276,7 +282,28 @@ let ui = (() => { try { return { mode:'month', filter:[], ...JSON.parse(localSto
 const saveUI = () => { try { localStorage.setItem(UIKEY, JSON.stringify({ mode:ui.mode, filter:ui.filter, ts:ui.ts })); } catch (e) {} };
 const applyTextSize = () => document.documentElement.style.setProperty('--ts', ui.ts || 1);
 function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} }
-function persist() { db.updated = Date.now(); saveLocal(); schedulePush(); }
+/* Undo / redo history: every saved change keeps a copy of how things were just before it */
+let lastSaved = null, undoStack = [], redoStack = [], pendingLabel = '';
+function persist(label) {
+  if (lastSaved !== null) { undoStack.push({ json:lastSaved, label: label || pendingLabel || 'last change' }); if (undoStack.length > 40) undoStack.shift(); redoStack = []; }
+  pendingLabel = '';
+  db.updated = Date.now(); saveLocal(); lastSaved = JSON.stringify(db); schedulePush(); updateHistBtns();
+}
+function updateHistBtns() {
+  const u = document.getElementById('undoBtn'), rd = document.getElementById('redoBtn'); if (!u) return;
+  u.disabled = !undoStack.length; rd.disabled = !redoStack.length;
+  u.title = undoStack.length ? 'Undo: ' + undoStack[undoStack.length - 1].label : 'Nothing to undo';
+}
+function stepHistory(from, to, verb) {
+  const st = from.pop(); if (!st) return;
+  to.push({ json: JSON.stringify(db), label: st.label });
+  db = normalize(JSON.parse(st.json)); db.updated = Date.now(); saveLocal(); lastSaved = JSON.stringify(db); schedulePush(); updateHistBtns();
+  render();
+  if (sheetMode === 'day') openDay(sheetDay); else if (sheetMode === 'todo') openTodo(); else if (sheetMode) closeSheet();
+  toast(`${verb}: ${st.label}`, null, 2500);
+}
+const undo = () => stepHistory(undoStack, redoStack, 'Undone');
+const redo = () => stepHistory(redoStack, undoStack, 'Redone');
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 /* ================= Helpers ================= */
@@ -723,7 +750,7 @@ function openQuick(base) {
     const item = build(), clash = item.start ? findClashes(item.date, item, null) : [];
     withUndo(`Added to ${shortDate(item.date)}${clash.length ? ' · ⚠️ overlaps ' + place(clash[0].placeId).name : ''}`, () => db.entries.push(item), () => openDay(item.date));
   };
-  ed.onclick = () => { if (!cur) return; const item = build(); db.entries.push(item); persist(); render(); openEditor(item.date, item.id); };
+  ed.onclick = () => { if (!cur) return; const item = build(); db.entries.push(item); persist('added item'); render(); openEditor(item.date, item.id); };
   inp.addEventListener('keydown', ev => { if (ev.key === 'Enter' && !add.disabled) add.click(); });
   setTimeout(() => inp.focus(), 250);
 }
@@ -752,9 +779,8 @@ function toast(msg, undoFn, ms = 6000) {
 }
 // Make a change that can be undone from the toast
 function withUndo(msg, change, after) {
-  const before = JSON.stringify(db);
-  change(); persist(); render(); after && after();
-  toast(msg, () => { db = normalize(JSON.parse(before)); persist(); render(); if (sheetMode === 'day') openDay(sheetDay); else if (sheetMode) closeSheet(); }, 8000);
+  change(); persist(msg); render(); after && after();
+  toast(msg, undo, 8000);
 }
 
 /* ================= Day view ================= */
@@ -790,7 +816,7 @@ function openDay(date) {
     cb.checked ? s.add(i) : s.delete(i);
     if (s.size) e.done[date] = [...s]; else delete e.done[date];
     cb.nextElementSibling.classList.toggle('done', cb.checked);
-    persist(); render();
+    persist(cb.checked ? 'ticked a task' : 'unticked a task'); render();
   });
   body.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
     const e = db.entries.find(x => x.id === b.dataset.q);
@@ -1448,7 +1474,7 @@ async function initCloud() {
     if (!snap.exists) { if (!snap.metadata.fromCache) pushRemote(); return; }
     let r; try { r = JSON.parse(snap.data().json); } catch (e) { return; }
     if ((r.updated || 0) > db.updated) {
-      db = normalize(r); saveLocal();
+      db = normalize(r); saveLocal(); lastSaved = JSON.stringify(db);
       if (sheetMode === 'day') openDay(sheetDay); else if (sheetMode === 'todo') openTodo(); else if (!sheetMode) render(); else renderChips();
     } else if ((r.updated || 0) < db.updated) { pushRemote(); return; }
     if (!snap.metadata.fromCache) setSync('☁︎ Synced');
@@ -1457,6 +1483,9 @@ async function initCloud() {
 
 /* ================= Start ================= */
 applyTextSize();
+lastSaved = JSON.stringify(db);
+document.getElementById('undoBtn').onclick = undo;
+document.getElementById('redoBtn').onclick = redo;
 render();
 initCloud();
 // Offline mode is switched off for now: remove any old offline copy
