@@ -56,7 +56,9 @@
     #main { display:block; }
     .grid { overflow:visible; --rowmin:110px; }
     .weekdays { position:sticky; top:0; z-index:5; background:var(--bg); }
-    .week { height:calc(100dvh - 8px); }
+    .week { height:auto; display:block; }
+    .wk-body { overflow:visible; }
+    .wk-head { position:sticky; top:0; z-index:6; background:var(--bg); }
     header { padding-top:6px; }
     .title { font-size:24px; }
   }
@@ -463,7 +465,7 @@ function renderMonth() {
   bindSwipe(document.getElementById('grid'));
 }
 
-let H = 46; const START_H = 3;   // px per hour, first hour shown
+let H = 46;   // px per hour in week view
 function weekStart() { const d = new Date(cursor); d.setDate(d.getDate() - (d.getDay() + 1) % 7); return isoOf(d); }
 // Put overlapping items side by side: returns id -> {lane, cols}
 function layoutLanes(list) {
@@ -480,9 +482,14 @@ function layoutLanes(list) {
   close();
   return out;
 }
-function renderWeek() {
-  H = Math.round(46 * Math.max(1, ui.ts || 1));
+const isSideways = () => window.matchMedia('(max-height:500px)').matches;
+function renderWeek(fitH) {
   const ws = weekStart(), dates = [...Array(7)].map((_, i) => addDays(ws, i)), today = todayIso();
+  // Show the day from the earliest of Fajr / first item, until midnight
+  let first = 24 * 60;
+  dates.forEach(d => { first = Math.min(first, toMin(prayerTimes(d).fajr), ...entriesFor(d).filter(x => x.start).map(x => toMin(x.start))); });
+  const START_H = Math.max(0, Math.floor(first / 60) - (first % 60 < 30 ? 1 : 0)), hoursShown = 24 - START_H;
+  H = fitH || Math.round((isSideways() ? 34 : 30) * (ui.ts || 1));
   const s = parse(ws), e = parse(dates[6]), same = s.getMonth() === e.getMonth();
   document.getElementById('mName').textContent = same ? MONTHS[s.getMonth()] : `${s.getDate()} ${MONTHS[s.getMonth()].slice(0, 3)} – ${e.getDate()} ${MONTHS[e.getMonth()].slice(0, 3)}`;
   document.getElementById('yName').textContent = same ? `${s.getDate()}–${e.getDate()}, ${e.getFullYear()}` : e.getFullYear();
@@ -496,7 +503,7 @@ function renderWeek() {
     list.forEach(en => {
       const p = place(en.placeId);
       if (!en.start) { a += `<div class="allblk" style="background:${esc(p.color)}" data-date="${date}" data-id="${en.id}">${esc(p.name)}</div>`; return; }
-      const L = lanes[en.id], top = Math.max(0, y(L.s)), h = Math.max(22, y(L.f) - top - 2);
+      const L = lanes[en.id], top = Math.max(0, y(L.s)), h = Math.max(Math.min(22, H - 2), y(L.f) - top - 2);
       const left = L.lane / L.cols * 100, width = 100 / L.cols;
       boxes.push({ top, bot: top + h, left, width });
       const dn = doneSet(en, date);
@@ -516,14 +523,19 @@ function renderWeek() {
     all += `<div>${a}</div>`;
     cols += `<div class="wk-col${we}" data-date="${date}" style="height:${(24 - START_H) * H}px">${c}</div>`;
   });
-  let hours = ''; for (let h = START_H; h < 24; h++) hours += `<div>${h === 12 ? '12pm' : h > 12 ? h - 12 + 'pm' : h + 'am'}</div>`;
+  let hours = ''; for (let h = START_H; h < 24; h++) hours += `<div>${H < 22 && h % 2 ? '' : h === 12 ? '12pm' : h > 12 ? h - 12 + 'pm' : h + 'am'}</div>`;
   main.innerHTML = `<div class="week" style="--h:${H}px"><div class="wk-head">${head}</div><div class="wk-all">${all}</div>
     <div class="wk-body" id="wkBody"><div class="wk-grid"><div class="wk-hours">${hours}</div>${cols}</div></div></div>`;
   const body = document.getElementById('wkBody');
-  body.scrollTop = ui.wkScroll ?? (7 - START_H) * H;
-  body.onscroll = () => { ui.wkScroll = body.scrollTop; };
-  bindSwipe(body);
+  // Upright: shrink the hours so the whole day fits on screen (bigger text setting allows a little scrolling)
+  if (!fitH && !isSideways() && body.clientHeight > 100) {
+    const fit = Math.max(Math.round(16 * (ui.ts || 1)), Math.floor((body.clientHeight - 4) / hoursShown));
+    if (Math.abs(fit - H) > 1) return renderWeek(fit);
+  }
+  bindSwipe(isSideways() ? main.querySelector('.week') : body);
 }
+let resizeT;
+window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (ui.mode === 'week' && !sheetMode) render(); }, 200); });
 
 function render() {
   renderChips();
