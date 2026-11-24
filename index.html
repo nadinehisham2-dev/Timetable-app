@@ -202,6 +202,8 @@
   .tb { flex:none; border:none; background:var(--soft); color:var(--text); border-radius:12px; padding:6px 11px; font-size:13px; cursor:pointer; white-space:nowrap; }
   .tb small { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.3px; }
   .tb .np { color:var(--prayer); }
+  .repline { font-size:13px; color:var(--muted); margin:4px 0 2px; }
+  .daypick button { flex:1; }
   .tb.pick { background:var(--text); color:var(--bg); font-weight:600; }
   .daypick button { display:flex; flex-direction:column; align-items:center; min-width:84px; border-style:solid; color:var(--text); }
   .daypick button small { color:var(--muted); font-size:11px; }
@@ -649,10 +651,13 @@ function updateNextPrayer() {   // the "today" bar at the top
   document.getElementById('qaBtn').onclick = () => openQuick(sheetDay && sheetMode === 'day' ? sheetDay : t);
 }
 
+// Next day (after the given one) that a repeating item happens on
+function nextAfter(e, date) { let d = date; for (let i = 0; i < 400; i++) { d = addDays(d, 1); if (e.repeat.until && d > e.repeat.until && !e.extra.some(x => x > date)) return null; if (occurs(e, d)) return d; } return null; }
+
 /* ================= Go to any day ================= */
 function openDayPicker() {
-  const t = todayIso(), quick = [...Array(14)].map((_, i) => addDays(t, i));
-  const label = (d, i) => i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : shortDate(d);
+  const t = todayIso(), quick = [0, 1, 2].map(i => addDays(t, i));
+  const label = (d, i) => ['Today', 'Tomorrow', 'After tomorrow'][i];
   showSheet('Go to a day', `
     <div class="quick daypick">${quick.map((d, i) => { const n = entriesFor(d, true).length;
       return `<button data-go="${d}" class="${i === 0 ? 'on' : ''}"><b>${label(d, i)}</b><small>${n ? n + ' item' + (n > 1 ? 's' : '') : 'free'}</small></button>`; }).join('')}</div>
@@ -816,7 +821,8 @@ function openDay(date) {
     html += `<div class="entry" style="border-left-color:${esc(p.color)}">
       <div class="top" data-edit="${e.id}"><span><span style="color:${esc(p.color)}">${esc(p.name)}</span>
         <span class="tm" style="color:${esc(p.color)}">${fmtRange(e.start, e.end)}</span>
-        ${e.repeat ? `<small>↻ ${repeatText(e.repeat)}</small>` : ''}</span><span class="edit">Edit</span></div>
+        </span><span class="edit">Edit</span></div>
+      ${e.repeat ? `<div class="repline">↻ ${esc(repeatText(e.repeat))}${nextAfter(e, date) ? ` · next: ${shortDate(nextAfter(e, date))}` : ''}${e.repeat.until ? ` · until ${shortDate(e.repeat.until)}` : ''}</div>` : ''}
       ${e.tasks.map((t, i) => t ? `<label class="chk"><input type="checkbox" data-e="${e.id}" data-i="${i}" ${done.has(i) ? 'checked' : ''}><span class="${done.has(i) ? 'done' : ''}">${esc(t)}</span></label>` : '').join('')}
       ${e.note ? `<div class="note">${esc(e.note)}</div>` : ''}
       ${e.remind != null ? `<div class="meta">🔔 ${remindLabel(e.remind)}</div>` : ''}
