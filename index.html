@@ -822,7 +822,6 @@ function openDay(date) {
       <div class="top" data-edit="${e.id}"><span><span style="color:${esc(p.color)}">${esc(p.name)}</span>
         <span class="tm" style="color:${esc(p.color)}">${fmtRange(e.start, e.end)}</span>
         </span><span class="edit">Edit</span></div>
-      ${e.repeat ? `<div class="repline">↻ ${esc(repeatText(e.repeat))}${nextAfter(e, date) ? ` · next: ${shortDate(nextAfter(e, date))}` : ''}${e.repeat.until ? ` · until ${shortDate(e.repeat.until)}` : ''}</div>` : ''}
       ${e.tasks.map((t, i) => t ? `<label class="chk"><input type="checkbox" data-e="${e.id}" data-i="${i}" ${done.has(i) ? 'checked' : ''}><span class="${done.has(i) ? 'done' : ''}">${esc(t)}</span></label>` : '').join('')}
       ${e.note ? `<div class="note">${esc(e.note)}</div>` : ''}
       ${e.remind != null ? `<div class="meta">🔔 ${remindLabel(e.remind)}</div>` : ''}
