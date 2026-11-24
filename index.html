@@ -9,114 +9,179 @@
 <title>Timetable</title>
 <style>
   :root {
-    --bg: #ffffff; --text: #111; --muted: #8e8e93; --line: #e3e3e6;
-    --weekend: #f4f4f5; --accent: #e0533d; --sheet: #ffffff; --soft: #f2f2f7;
+    --bg:#fff; --text:#111; --muted:#8e8e93; --line:#e3e3e6; --weekend:#f4f4f5;
+    --accent:#e0533d; --sheet:#fff; --soft:#f2f2f7; --prayer:#0f8a6c;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#000; --text:#f2f2f2; --muted:#8e8e93; --line:#2c2c2e;
-            --weekend:#111113; --sheet:#1c1c1e; --soft:#2c2c2e; }
+    :root:not([data-theme=light]) { --bg:#000; --text:#f2f2f2; --line:#2c2c2e; --weekend:#111113; --sheet:#1c1c1e; --soft:#2c2c2e; --prayer:#38c9a3; }
   }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root[data-theme=dark] { --bg:#000; --text:#f2f2f2; --line:#2c2c2e; --weekend:#111113; --sheet:#1c1c1e; --soft:#2c2c2e; --prayer:#38c9a3; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; }
-  body { display:flex; flex-direction:column; padding-top: env(safe-area-inset-top); }
+    font-family:-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; }
+  body { display:flex; flex-direction:column; padding-top:env(safe-area-inset-top); overflow:hidden; }
+  button { font:inherit; }
 
-  header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px 6px; gap:8px; }
-  .title { font-size: clamp(24px, 5vw, 42px); letter-spacing:-0.5px; white-space:nowrap; }
-  .title b { font-weight:800; }
-  .title span { font-weight:400; }
-  .actions { display:flex; align-items:center; gap:4px; }
-  .btn-link { background:none; border:none; color:var(--accent); font-size:17px; padding:8px 10px; cursor:pointer; }
-  .icon-btn { background:none; border:none; color:var(--accent); font-size:22px; padding:6px 10px; cursor:pointer; }
+  /* Header */
+  header { padding:10px 14px 4px; }
+  .row1 { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .title { font-size:clamp(24px,5vw,40px); letter-spacing:-.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .title b { font-weight:800; } .title span { font-weight:400; }
+  .row2 { display:flex; align-items:center; gap:6px; margin-top:6px; flex-wrap:wrap; }
+  .seg { display:inline-flex; background:var(--soft); border-radius:9px; padding:2px; }
+  .seg button { border:none; background:none; padding:5px 12px; border-radius:7px; font-size:14px; color:var(--text); cursor:pointer; }
+  .seg button.on { background:var(--bg); box-shadow:0 1px 3px rgba(0,0,0,.15); font-weight:600; }
+  .btn-link { background:none; border:none; color:var(--accent); font-size:17px; padding:6px 8px; cursor:pointer; }
+  .icon-btn { background:none; border:none; color:var(--accent); font-size:20px; padding:4px 8px; cursor:pointer; line-height:1; }
+  .spacer { flex:1; }
+  .info { font-size:12px; color:var(--muted); white-space:nowrap; }
+  .info .np { color:var(--prayer); font-weight:600; }
+  .chips { display:flex; gap:6px; overflow-x:auto; padding:8px 0 4px; scrollbar-width:none; }
+  .chips::-webkit-scrollbar { display:none; }
+  .chip { flex:none; border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:16px;
+    padding:4px 11px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:5px; }
+  .chip.on { border-color:transparent; background:var(--text); color:var(--bg); }
+  .chip .dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
 
+  /* Month */
+  #main { flex:1; min-height:0; display:flex; flex-direction:column; }
   .weekdays { display:grid; grid-template-columns:repeat(7,1fr); border-bottom:1px solid var(--line); }
-  .weekdays div { text-align:right; padding:6px 8px; font-size:clamp(12px,2.4vw,20px); font-weight:500; }
+  .weekdays div { text-align:right; padding:5px 8px; font-size:clamp(12px,2.3vw,19px); font-weight:500; }
   .weekdays div.we { color:var(--muted); }
-
-  .grid { flex:1; overflow-y:auto; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; min-height:0; }
-  .cell { border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:4px 4px 2px;
-    overflow:hidden; cursor:pointer; display:flex; flex-direction:column; min-height:70px; }
+  .grid { flex:1; overflow-y:auto; display:grid; grid-template-columns:repeat(7,1fr); min-height:0; }
+  .cell { border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:3px 3px 2px;
+    overflow:hidden; cursor:pointer; display:flex; flex-direction:column; min-height:74px; }
   .cell:nth-child(7n) { border-right:none; }
   .cell.we { background:var(--weekend); }
   .cell.empty { cursor:default; }
-  .num { align-self:flex-end; font-size:clamp(13px,2.6vw,24px); font-weight:500; width:1.7em; height:1.7em;
-    display:flex; align-items:center; justify-content:center; border-radius:50%; margin-bottom:2px; }
+  .num { align-self:flex-end; font-size:clamp(13px,2.5vw,23px); font-weight:500; width:1.7em; height:1.7em;
+    display:flex; align-items:center; justify-content:center; border-radius:50%; margin-bottom:1px; flex:none; }
   .cell.we .num { color:var(--muted); }
   .cell.today .num { background:var(--accent); color:#fff; }
-  .items { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; scrollbar-width:thin; text-align:center; font-size:clamp(8px,1.35vw,13px); line-height:1.3; }
-  .items .pl { font-weight:700; }
-  .tm { font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif;
-    font-weight:500; font-variant-numeric: tabular-nums; letter-spacing:0; opacity:.9; }
-  .items .tm { font-size:.78em; }
-  .items .pl { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .items { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
+    scrollbar-width:thin; text-align:center; font-size:clamp(8px,1.35vw,13px); line-height:1.3; }
+  .items .pl { font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .items .sec { padding:2px 0; }
   .items .sec + .sec { border-top:1px solid var(--line); margin-top:2px; padding-top:3px; }
-  .items .tk { color:var(--text); }
+  .tm { font-family:ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; font-weight:500;
+    font-variant-numeric:tabular-nums; opacity:.9; }
+  .items .tm { font-size:.78em; }
+  .done { text-decoration:line-through; opacity:.4; }
+
+  /* Week */
+  .week { flex:1; min-height:0; display:flex; flex-direction:column; }
+  .wk-head, .wk-all { display:grid; grid-template-columns:44px repeat(7,1fr); border-bottom:1px solid var(--line); }
+  .wk-head div { text-align:center; padding:4px 0; font-size:12px; cursor:pointer; }
+  .wk-head div b { display:block; font-size:18px; font-weight:500; }
+  .wk-head div.we { color:var(--muted); }
+  .wk-head div.today b { color:#fff; background:var(--accent); border-radius:50%; width:30px; height:30px; line-height:30px; margin:0 auto; }
+  .wk-all > div { min-height:20px; border-left:1px solid var(--line); padding:2px; font-size:10px; }
+  .wk-all > div:first-child { border:none; font-size:9px; color:var(--muted); display:flex; align-items:center; justify-content:center; }
+  .wk-body { flex:1; overflow-y:auto; position:relative; }
+  .wk-grid { display:grid; grid-template-columns:44px repeat(7,1fr); position:relative; }
+  .wk-hours div { height:var(--h); font-size:10px; color:var(--muted); text-align:right; padding-right:4px; transform:translateY(-6px); }
+  .wk-col { position:relative; border-left:1px solid var(--line);
+    background-image:linear-gradient(var(--line) 1px, transparent 1px); background-size:100% var(--h); }
+  .wk-col.we { background-color:var(--weekend); }
+  .blk { position:absolute; left:2px; right:2px; border-radius:6px; padding:2px 4px; font-size:10px; line-height:1.25;
+    overflow:hidden; cursor:pointer; color:#fff; z-index:1; }
+  .blk .tm { font-size:.9em; display:block; }
+  .pr { position:absolute; left:0; right:0; border-top:1px dashed var(--prayer); pointer-events:none; }
+  .pr span { position:absolute; right:1px; top:-11px; font-size:8px; color:var(--prayer); background:var(--bg); padding:0 2px; border-radius:3px; }
+  .pr i { font-style:normal; }
+  @media (max-width:699px) { .pr i { display:none; } }
+  .now { position:absolute; left:0; right:0; border-top:2px solid var(--accent); pointer-events:none; z-index:2; }
+  .allblk { border-radius:4px; color:#fff; padding:1px 3px; margin-bottom:2px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
   /* Sheet */
   .overlay { position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; z-index:10; }
   .overlay.open { display:block; }
-  .sheet { position:fixed; left:0; right:0; bottom:0; max-height:85dvh; background:var(--sheet);
+  .sheet { position:fixed; left:0; right:0; bottom:0; max-height:88dvh; background:var(--sheet);
     border-radius:16px 16px 0 0; transform:translateY(100%); transition:transform .25s ease; z-index:11;
-    display:flex; flex-direction:column; padding-bottom: env(safe-area-inset-bottom); }
+    display:flex; flex-direction:column; padding-bottom:env(safe-area-inset-bottom); }
   .sheet.open { transform:translateY(0); }
-  @media (min-width: 700px) {
-    .sheet { inset:0; margin:auto; width:min(560px, 92vw); height:fit-content; max-height:85dvh;
-      border-radius:16px; transform:scale(.96); opacity:0; pointer-events:none;
-      transition: transform .2s ease, opacity .2s ease; }
+  @media (min-width:700px) {
+    .sheet { inset:0; margin:auto; width:min(560px,92vw); height:fit-content; max-height:86dvh; border-radius:16px;
+      transform:scale(.96); opacity:0; pointer-events:none; transition:transform .2s ease, opacity .2s ease; }
     .sheet.open { transform:scale(1); opacity:1; pointer-events:auto; }
   }
-  .sheet-head { display:flex; align-items:center; justify-content:space-between; padding:14px 16px;
-    border-bottom:1px solid var(--line); }
-  .sheet-head h2 { margin:0; font-size:19px; }
-  .sheet-body { overflow-y:auto; min-height:0; -webkit-overflow-scrolling:touch; padding:12px 16px 20px; }
+  .sheet-head { display:grid; grid-template-columns:80px 1fr 80px; align-items:center; padding:10px 8px; border-bottom:1px solid var(--line); }
+  .sheet-head h2 { margin:0; font-size:17px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sheet-head .btn-link:last-child { justify-self:end; }
+  .sheet-body { overflow-y:auto; min-height:0; padding:12px 16px 20px; -webkit-overflow-scrolling:touch; }
 
-  .entry { background:var(--soft); border-radius:12px; padding:12px; margin-bottom:10px;
-    border-left:6px solid #999; cursor:pointer; }
-  .entry .top { display:flex; justify-content:space-between; gap:8px; font-weight:700; }
-  .entry ul { margin:6px 0 0; padding-left:18px; }
-  .entry .note { margin-top:6px; color:var(--muted); font-size:14px; white-space:pre-wrap; }
-  .empty-msg { color:var(--muted); text-align:center; padding:20px 0; }
+  .prayers { display:flex; gap:6px; overflow-x:auto; margin-bottom:12px; scrollbar-width:none; }
+  .prayers div { flex:1; min-width:56px; background:var(--soft); border-radius:10px; padding:6px 4px; text-align:center; font-size:11px; color:var(--muted); }
+  .prayers div b { display:block; color:var(--prayer); font-size:13px; font-weight:600; }
+  .prayers div.next { outline:2px solid var(--prayer); }
 
-  .primary { width:100%; background:var(--accent); color:#fff; border:none; border-radius:12px;
-    font-size:17px; font-weight:600; padding:13px; cursor:pointer; }
-  .secondary { width:100%; background:var(--soft); color:var(--text); border:none; border-radius:12px;
-    font-size:16px; padding:12px; cursor:pointer; margin-top:8px; }
+  .entry { background:var(--soft); border-radius:12px; padding:10px 12px; margin-bottom:10px; border-left:6px solid #999; }
+  .entry .top { display:flex; justify-content:space-between; align-items:center; gap:8px; font-weight:700; cursor:pointer; }
+  .entry .top small { font-weight:400; color:var(--muted); font-size:12px; }
+  .entry .edit { color:var(--accent); font-weight:500; font-size:14px; }
+  .chk { display:flex; align-items:flex-start; gap:8px; padding:5px 0; cursor:pointer; font-size:15px; }
+  .chk input { width:20px; height:20px; margin:0; flex:none; accent-color:var(--accent); }
+  .entry .note { margin-top:4px; color:var(--muted); font-size:14px; white-space:pre-wrap; }
+  .meta { font-size:12px; color:var(--muted); margin-top:4px; }
+  .empty-msg { color:var(--muted); text-align:center; padding:14px 0; }
+
+  .primary { width:100%; background:var(--accent); color:#fff; border:none; border-radius:12px; font-size:17px; font-weight:600; padding:13px; cursor:pointer; }
+  .primary:disabled { opacity:.4; cursor:default; }
+  .secondary { width:100%; background:var(--soft); color:var(--text); border:none; border-radius:12px; font-size:16px; padding:12px; cursor:pointer; margin-top:8px; }
   .danger { width:100%; background:none; color:#ff3b30; border:none; font-size:16px; padding:12px; cursor:pointer; margin-top:4px; }
-
-  label { display:block; font-size:13px; color:var(--muted); margin:12px 0 5px; text-transform:uppercase; letter-spacing:.3px; }
+  .two { display:flex; gap:8px; } .two > * { flex:1; }
+  .lbl, .sheet-body > label, .sheet-body .row label { display:block; font-size:12px; color:var(--muted); margin:14px 0 5px; text-transform:uppercase; letter-spacing:.3px; }
   input, select, textarea { width:100%; font:inherit; font-size:16px; padding:10px 12px; border-radius:10px;
     border:1px solid var(--line); background:var(--bg); color:var(--text); }
-  textarea { min-height:70px; resize:vertical; }
-  .row { display:flex; gap:10px; } .row > * { flex:1; }
+  textarea { min-height:64px; resize:vertical; }
+  .row { display:flex; gap:10px; } .row > * { flex:1; min-width:0; }
   .task-row { display:flex; gap:6px; margin-bottom:6px; }
-  .task-row button { background:none; border:none; color:#ff3b30; font-size:20px; cursor:pointer; }
-  .add-small { background:none; border:none; color:var(--accent); font-size:15px; padding:4px 0; cursor:pointer; }
-
-  .place-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
+  .task-row button, .place-row button { background:none; border:none; color:#ff3b30; font-size:22px; cursor:pointer; padding:0 6px; }
+  .add-small { background:none; border:none; color:var(--accent); font-size:15px; padding:6px 0; cursor:pointer; }
+  .days { display:flex; gap:4px; } .days button { flex:1; border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:8px; padding:7px 0; font-size:13px; cursor:pointer; }
+  .days button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .quick { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .quick button { border:1px dashed var(--line); background:none; border-radius:14px; padding:5px 10px; font-size:13px; cursor:pointer; }
+  .place-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); }
   .place-row input[type=color] { width:42px; height:36px; padding:2px; flex:none; }
-  .place-row input[type=text] { flex:1; }
-  .place-row button { background:none; border:none; color:#ff3b30; font-size:20px; cursor:pointer; }
-  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
+  .box { background:var(--soft); border-radius:12px; padding:12px; margin-top:10px; font-size:15px; line-height:1.45; }
+  .warn { color:var(--accent); font-weight:600; }
+  .res { padding:10px 0; border-bottom:1px solid var(--line); cursor:pointer; }
+  .res small { color:var(--muted); display:block; }
+
+  .toast { position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(200%);
+    background:#222; color:#fff; border-radius:12px; padding:10px 14px; display:flex; gap:14px; align-items:center;
+    z-index:30; transition:transform .2s ease; max-width:92vw; font-size:15px; box-shadow:0 4px 20px rgba(0,0,0,.3); }
+  .toast.show { transform:translateX(-50%) translateY(0); }
+  .toast button { background:none; border:none; color:#ffb19f; font-weight:700; font-size:15px; cursor:pointer; }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="title"><b id="mName"></b> <span id="yName"></span></div>
-  <div class="actions">
-    <button class="icon-btn" id="prev" aria-label="Previous month">‹</button>
+  <div class="row1">
+    <div class="title"><b id="mName"></b> <span id="yName"></span></div>
     <button class="btn-link" id="today">Today</button>
-    <button class="icon-btn" id="next" aria-label="Next month">›</button>
-    <button class="icon-btn" id="placesBtn" aria-label="Places and colors" title="Places & colors">🎨</button>
   </div>
+  <div class="row2">
+    <div class="seg"><button id="vMonth" class="on">Month</button><button id="vWeek">Week</button></div>
+    <button class="icon-btn" id="prev" aria-label="Previous">‹</button>
+    <button class="icon-btn" id="next" aria-label="Next">›</button>
+    <span class="spacer"></span>
+    <button class="icon-btn" id="searchBtn" aria-label="Search">🔍</button>
+    <button class="icon-btn" id="remBtn" aria-label="Reminders">🔔</button>
+    <button class="icon-btn" id="setBtn" aria-label="Places and settings">🎨</button>
+  </div>
+  <div class="row2" style="margin-top:2px">
+    <span class="info" id="nextPrayer"></span><span class="spacer"></span><span class="info" id="sync">Saved on this device</span>
+  </div>
+  <div class="chips" id="chips"></div>
 </header>
 
-<div class="weekdays" id="weekdays"></div>
-<div class="grid" id="grid"></div>
+<div id="main"></div>
 
 <div class="overlay" id="overlay"></div>
-<div class="sheet" id="sheet">
+<div class="sheet" id="sheet" role="dialog">
   <div class="sheet-head">
     <button class="btn-link" id="sheetBack" style="visibility:hidden">‹ Back</button>
     <h2 id="sheetTitle"></h2>
@@ -124,222 +189,608 @@
   </div>
   <div class="sheet-body" id="sheetBody"></div>
 </div>
+<div class="toast" id="toast"><span id="toastMsg"></span><button id="toastBtn">Undo</button></div>
 
 <script>
-// ---------- Storage ----------
-const KEY = 'timetable-v1';
-const DEFAULT = {
-  places: [
-    { id: 'p1', name: 'PUA',    color: '#6a9a3a' },
-    { id: 'p2', name: 'Mounir', color: '#2350c8' },
-    { id: 'p3', name: 'Yoga',   color: '#b13ee0' },
-  ],
-  entries: []
-};
-function load() {
-  try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.places) return d; } catch (e) {}
-  return structuredClone(DEFAULT);
+/* ================= Data ================= */
+const KEY = 'timetable-v1', UIKEY = 'timetable-ui';
+const DEFAULT = { places: [
+  { id:'p1', name:'PUA', color:'#6a9a3a', remind:null },
+  { id:'p2', name:'Mounir', color:'#2350c8', remind:null },
+  { id:'p3', name:'Yoga', color:'#b13ee0', remind:null } ], entries: [], updated: 0 };
+
+function normalize(d) {
+  d = d && d.places ? d : JSON.parse(JSON.stringify(DEFAULT));
+  d.entries = (d.entries || []).map(e => ({ tasks:[], note:'', start:'', end:'', remind:null, repeat:null,
+    skip:[], extra:[], done:{}, ...e }));
+  d.places.forEach(p => { if (p.remind === undefined) p.remind = null; });
+  d.updated = d.updated || 0;
+  return d;
 }
-let db = load();
-function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { alert('Could not save'); } }
+const clone = o => JSON.parse(JSON.stringify(o));
+let db = (() => { try { return normalize(JSON.parse(localStorage.getItem(KEY))); } catch (e) { return normalize(null); } })();
+let ui = (() => { try { return { mode:'month', filter:[], ...JSON.parse(localStorage.getItem(UIKEY)) }; } catch (e) { return { mode:'month', filter:[] }; } })();
+const saveUI = () => { try { localStorage.setItem(UIKEY, JSON.stringify({ mode:ui.mode, filter:ui.filter })); } catch (e) {} };
+function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} }
+function persist() { db.updated = Date.now(); saveLocal(); schedulePush(); }
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-// ---------- Helpers ----------
+/* ================= Helpers ================= */
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DAYS = ['Sat','Sun','Mon','Tue','Wed','Thu','Fri'];   // week starts Saturday
-const WEEKEND = new Set([0, 6]);                             // Sat & Fri columns
+const DAYS = ['Sat','Sun','Mon','Tue','Wed','Thu','Fri'];          // columns, week starts Saturday
+const COL2DOW = [6,0,1,2,3,4,5];                                     // column -> JS getDay()
+const WEEKEND = new Set([0, 6]);                                     // Sat & Fri columns
 const pad = n => String(n).padStart(2, '0');
 const iso = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+const isoOf = dt => iso(dt.getFullYear(), dt.getMonth(), dt.getDate());
+const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return isoOf(d); };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const place = id => db.places.find(p => p.id === id) || { name: 'Other', color: '#888' };
+const place = id => db.places.find(p => p.id === id) || { name:'Other', color:'#888' };
+const todayIso = () => isoOf(new Date());
+const toMin = t => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 
 function fmtTime(t) {
   if (!t) return '';
-  let [h, m] = t.split(':').map(Number);
-  const ap = h >= 12 ? 'pm' : 'am'; h = h % 12 || 12;
+  let [h, m] = t.split(':').map(Number); const ap = h >= 12 ? 'pm' : 'am'; h = h % 12 || 12;
   return m ? `${h}:${pad(m)}${ap}` : `${h}${ap}`;
 }
 function fmtRange(s, e) {
-  if (!s) return '';
-  if (!e) return fmtTime(s);
+  if (!s) return ''; if (!e) return fmtTime(s);
   const a = fmtTime(s), b = fmtTime(e);
-  // "2-7pm" when both share am/pm, like the original
-  if (a.slice(-2) === b.slice(-2)) return a.slice(0, -2) + '-' + b;
-  return a + '-' + b;
+  return a.slice(-2) === b.slice(-2) ? a.slice(0, -2) + '-' + b : a + '-' + b;
 }
-const entriesFor = date => db.entries.filter(e => e.date === date)
-  .sort((a, b) => (a.start || '99').localeCompare(b.start || '99'));
+const longDate = s => parse(s).toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
+const shortDate = s => parse(s).toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' });
+const remindLabel = m => m == null ? 'No reminder' : m === 0 ? 'At start time' : m === 1440 ? '1 day before' : m === 60 ? '1 hour before' : `${m} min before`;
+const REMIND_OPTS = [null, 0, 10, 30, 60, 1440];
 
-// ---------- Calendar ----------
-let view = new Date(); view.setDate(1);
+/* ================= Repeats ================= */
+function occurs(e, date) {
+  if (!e.repeat) return e.date === date;
+  if (e.skip.includes(date)) return false;
+  if (e.extra.includes(date)) return true;
+  if (date < e.date) return false;
+  if (e.repeat.until && date > e.repeat.until) return false;
+  const d = parse(date);
+  if (e.repeat.freq === 'daily') return true;
+  if (e.repeat.freq === 'weekly') return (e.repeat.days || []).includes(d.getDay());
+  if (e.repeat.freq === 'monthly') return d.getDate() === parse(e.date).getDate();
+  return false;
+}
+const visible = e => !ui.filter.length || ui.filter.includes(e.placeId);
+function entriesFor(date, all) {
+  return db.entries.filter(e => occurs(e, date) && (all || visible(e)))
+    .sort((a, b) => (a.start || '99').localeCompare(b.start || '99'));
+}
+const doneSet = (e, date) => new Set(e.done[date] || []);
+function repeatText(r) {
+  if (!r) return '';
+  if (r.freq === 'daily') return 'Every day';
+  if (r.freq === 'monthly') return 'Every month';
+  const names = COL2DOW.map((dow, i) => r.days.includes(dow) ? DAYS[i] : null).filter(Boolean);
+  return 'Every ' + (names.length === 7 ? 'day' : names.join(', '));
+}
 
-document.getElementById('weekdays').innerHTML =
-  DAYS.map((d, i) => `<div class="${WEEKEND.has(i) ? 'we' : ''}">${d}</div>`).join('');
+/* ================= Prayer times (Alexandria, Egyptian General Authority) ================= */
+const LAT = 31.2001, LNG = 29.9187, FAJR = 19.5, ISHA = 17.5;
+const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
+const fix = (a, b) => { a = a - b * Math.floor(a / b); return a < 0 ? a + b : a; };
+function cairoOffset(y, m, d) {   // hours; follows Egypt's summer/winter time automatically
+  const t = new Date(Date.UTC(y, m, d, 12));
+  const loc = new Date(t.toLocaleString('en-US', { timeZone:'Africa/Cairo' }));
+  const utc = new Date(t.toLocaleString('en-US', { timeZone:'UTC' }));
+  return Math.round((loc - utc) / 36e5 * 4) / 4;
+}
+function sunPos(jd) {
+  const D = jd - 2451545.0, g = fix(357.529 + 0.98560028 * D, 360), q = fix(280.459 + 0.98564736 * D, 360);
+  const L = fix(q + 1.915 * Math.sin(rad(g)) + 0.020 * Math.sin(rad(2 * g)), 360), e = 23.439 - 0.00000036 * D;
+  const RA = fix(deg(Math.atan2(Math.cos(rad(e)) * Math.sin(rad(L)), Math.cos(rad(L)))) / 15, 24);
+  return { decl: deg(Math.asin(Math.sin(rad(e)) * Math.sin(rad(L)))), eqt: q / 15 - RA };
+}
+const prayerCache = {};
+function prayerTimes(date) {
+  if (prayerCache[date]) return prayerCache[date];
+  const [y, m, d] = date.split('-').map(Number);
+  let Y = y, M = m; if (M <= 2) { Y--; M += 12; }
+  const A = Math.floor(Y / 100), B = 2 - A + Math.floor(A / 4);
+  const jd0 = Math.floor(365.25 * (Y + 4716)) + Math.floor(30.6001 * (M + 1)) + d + B - 1524.5 - LNG / (15 * 24);
+  const noon = t => fix(12 - sunPos(jd0 + t).eqt, 24);
+  const angleTime = (angle, t, ccw) => {
+    const dec = sunPos(jd0 + t).decl;
+    const T = deg(Math.acos((-Math.sin(rad(angle)) - Math.sin(rad(dec)) * Math.sin(rad(LAT))) / (Math.cos(rad(dec)) * Math.cos(rad(LAT))))) / 15;
+    return noon(t) + (ccw ? -T : T);
+  };
+  const asrTime = t => { const dec = sunPos(jd0 + t).decl; return angleTime(-deg(Math.atan(1 / (1 + Math.tan(rad(Math.abs(LAT - dec)))))), t); };
+  let t = { fajr:5, sunrise:6, dhuhr:12, asr:13, maghrib:18, isha:18 };
+  for (let i = 0; i < 2; i++) {
+    const f = k => t[k] / 24;
+    t = { fajr:angleTime(FAJR, f('fajr'), true), sunrise:angleTime(0.833, f('sunrise'), true), dhuhr:noon(f('dhuhr')),
+          asr:asrTime(f('asr')), maghrib:angleTime(0.833, f('maghrib')), isha:angleTime(ISHA, f('isha')) };
+  }
+  const tz = cairoOffset(y, m - 1, d), out = {};
+  for (const k in t) { const mins = Math.round((t[k] + tz - LNG / 15) * 60); out[k] = `${pad(Math.floor(mins / 60) % 24)}:${pad(mins % 60)}`; }
+  return (prayerCache[date] = out);
+}
+const PRAYERS = [['fajr','Fajr'],['sunrise','Sunrise'],['dhuhr','Dhuhr'],['asr','Asr'],['maghrib','Maghrib'],['isha','Isha']];
+function nextPrayer() {
+  const now = new Date(), n = now.getHours() * 60 + now.getMinutes();
+  for (let off = 0; off < 2; off++) {
+    const date = addDays(todayIso(), off), pt = prayerTimes(date);
+    for (const [k, name] of PRAYERS) if (k !== 'sunrise' && (off || toMin(pt[k]) > n)) return { k, name, time: pt[k], date };
+  }
+}
 
-function render() {
-  const y = view.getFullYear(), m = view.getMonth();
+/* ================= Rendering ================= */
+let cursor = new Date(); cursor.setHours(0, 0, 0, 0);
+const main = document.getElementById('main');
+
+function renderChips() {
+  const el = document.getElementById('chips');
+  el.innerHTML = `<button class="chip ${ui.filter.length ? '' : 'on'}" data-p="">All</button>` +
+    db.places.map(p => `<button class="chip ${ui.filter.includes(p.id) ? 'on' : ''}" data-p="${esc(p.id)}"><span class="dot" style="background:${esc(p.color)}"></span>${esc(p.name)}</button>`).join('');
+}
+document.getElementById('chips').onclick = e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  const id = b.dataset.p;
+  if (!id) ui.filter = [];
+  else ui.filter = ui.filter.includes(id) ? ui.filter.filter(x => x !== id) : [...ui.filter, id];
+  saveUI(); render();
+};
+
+function cellItems(date) {
+  return entriesFor(date).map(e => {
+    const p = place(e.placeId), time = fmtRange(e.start, e.end), done = doneSet(e, date);
+    let s = `<div class="sec"><div class="pl" style="color:${esc(p.color)}">${esc(p.name)}${time ? ' <span class="tm">' + time + '</span>' : ''}</div>`;
+    e.tasks.forEach((tk, i) => { if (tk) s += `<div class="${done.has(i) ? 'done' : ''}">-${esc(tk)}-</div>`; });
+    return s + '</div>';
+  }).join('');
+}
+
+function renderMonth() {
+  const y = cursor.getFullYear(), m = cursor.getMonth();
   document.getElementById('mName').textContent = MONTHS[m];
   document.getElementById('yName').textContent = y;
-
-  const first = new Date(y, m, 1).getDay();       // 0=Sun..6=Sat
-  const offset = (first + 1) % 7;                  // Sat-first
-  const days = new Date(y, m + 1, 0).getDate();
-  const total = Math.ceil((offset + days) / 7) * 7;
-  const t = new Date(), todayIso = iso(t.getFullYear(), t.getMonth(), t.getDate());
-
+  const offset = (new Date(y, m, 1).getDay() + 1) % 7, days = new Date(y, m + 1, 0).getDate();
+  const total = Math.ceil((offset + days) / 7) * 7, today = todayIso();
   let html = '';
   for (let i = 0; i < total; i++) {
     const col = i % 7, d = i - offset + 1, we = WEEKEND.has(col) ? ' we' : '';
     if (d < 1 || d > days) { html += `<div class="cell empty${we}"></div>`; continue; }
     const date = iso(y, m, d);
-    const items = entriesFor(date).map(e => {
-      const p = place(e.placeId);
-      const time = fmtRange(e.start, e.end);
-      let s = `<div class="sec"><div class="pl" style="color:${p.color}">${esc(p.name)}${time ? ' <span class="tm">' + time + '</span>' : ''}</div>`;
-      (e.tasks || []).filter(Boolean).forEach(tk => s += `<div class="tk">-${esc(tk)}-</div>`);
-      return s + '</div>';
-    }).join('');
-    html += `<div class="cell${we}${date === todayIso ? ' today' : ''}" data-date="${date}">
-      <div class="num">${d}</div><div class="items">${items}</div></div>`;
+    html += `<div class="cell${we}${date === today ? ' today' : ''}" data-date="${date}"><div class="num">${d}</div><div class="items">${cellItems(date)}</div></div>`;
   }
-  const grid = document.getElementById('grid');
-  grid.innerHTML = html;
-  grid.style.gridTemplateRows = `repeat(${total / 7}, minmax(70px, 1fr))`;
+  main.innerHTML = `<div class="weekdays">${DAYS.map((d, i) => `<div class="${WEEKEND.has(i) ? 'we' : ''}">${d}</div>`).join('')}</div>
+    <div class="grid" id="grid" style="grid-template-rows:repeat(${total / 7}, minmax(74px,1fr))">${html}</div>`;
+  bindSwipe(document.getElementById('grid'));
 }
 
-document.getElementById('grid').addEventListener('click', e => {
-  const c = e.target.closest('.cell[data-date]'); if (c) openDay(c.dataset.date);
-});
-document.getElementById('prev').onclick = () => { view.setMonth(view.getMonth() - 1); render(); };
-document.getElementById('next').onclick = () => { view.setMonth(view.getMonth() + 1); render(); };
-document.getElementById('today').onclick = () => { view = new Date(); view.setDate(1); render(); };
+const H = 46, START_H = 3;   // px per hour, first hour shown
+function weekStart() { const d = new Date(cursor); d.setDate(d.getDate() - (d.getDay() + 1) % 7); return isoOf(d); }
+function renderWeek() {
+  const ws = weekStart(), dates = [...Array(7)].map((_, i) => addDays(ws, i)), today = todayIso();
+  const s = parse(ws), e = parse(dates[6]), same = s.getMonth() === e.getMonth();
+  document.getElementById('mName').textContent = same ? MONTHS[s.getMonth()] : `${s.getDate()} ${MONTHS[s.getMonth()].slice(0, 3)} – ${e.getDate()} ${MONTHS[e.getMonth()].slice(0, 3)}`;
+  document.getElementById('yName').textContent = same ? `${s.getDate()}–${e.getDate()}, ${e.getFullYear()}` : e.getFullYear();
+  const pos = t => (toMin(t) / 60 - START_H) * H;
+  let head = '<div></div>', all = '<div>all-day</div>', cols = '';
+  dates.forEach((date, i) => {
+    const d = parse(date), we = WEEKEND.has(i) ? ' we' : '';
+    head += `<div class="${we}${date === today ? ' today' : ''}" data-date="${date}">${DAYS[i]}<b>${d.getDate()}</b></div>`;
+    let a = '', c = '';
+    entriesFor(date).forEach(en => {
+      const p = place(en.placeId);
+      if (!en.start) { a += `<div class="allblk" style="background:${esc(p.color)}" data-date="${date}" data-id="${en.id}">${esc(p.name)}</div>`; return; }
+      const top = Math.max(0, pos(en.start)), end = en.end ? pos(en.end) : top + H;
+      const tasks = en.tasks.filter(Boolean).map(esc).join(', ');
+      c += `<div class="blk" style="top:${top}px;height:${Math.max(22, end - top - 2)}px;background:${esc(p.color)}" data-date="${date}" data-id="${en.id}"><b>${esc(p.name)}</b><span class="tm">${fmtRange(en.start, en.end)}</span>${tasks}</div>`;
+    });
+    const pt = prayerTimes(date);
+    PRAYERS.forEach(([k, name]) => { if (k !== 'sunrise') c += `<div class="pr" style="top:${pos(pt[k])}px"><span><i>${name} </i>${fmtTime(pt[k])}</span></div>`; });
+    if (date === today) { const n = new Date(); c += `<div class="now" style="top:${((n.getHours() + n.getMinutes() / 60) - START_H) * H}px"></div>`; }
+    all += `<div>${a}</div>`;
+    cols += `<div class="wk-col${we}" data-date="${date}" style="height:${(24 - START_H) * H}px">${c}</div>`;
+  });
+  let hours = ''; for (let h = START_H; h < 24; h++) hours += `<div>${h === 12 ? '12pm' : h > 12 ? h - 12 + 'pm' : h + 'am'}</div>`;
+  main.innerHTML = `<div class="week" style="--h:${H}px"><div class="wk-head">${head}</div><div class="wk-all">${all}</div>
+    <div class="wk-body" id="wkBody"><div class="wk-grid"><div class="wk-hours">${hours}</div>${cols}</div></div></div>`;
+  const body = document.getElementById('wkBody');
+  body.scrollTop = ui.wkScroll ?? (7 - START_H) * H;
+  body.onscroll = () => { ui.wkScroll = body.scrollTop; };
+  bindSwipe(body);
+}
 
-// swipe between months
-let sx = null;
-document.getElementById('grid').addEventListener('touchstart', e => sx = e.touches[0].clientX, { passive: true });
-document.getElementById('grid').addEventListener('touchend', e => {
-  if (sx === null) return; const dx = e.changedTouches[0].clientX - sx; sx = null;
-  if (Math.abs(dx) > 60) { view.setMonth(view.getMonth() + (dx < 0 ? 1 : -1)); render(); }
-});
+function render() {
+  renderChips();
+  document.getElementById('vMonth').classList.toggle('on', ui.mode === 'month');
+  document.getElementById('vWeek').classList.toggle('on', ui.mode === 'week');
+  ui.mode === 'week' ? renderWeek() : renderMonth();
+  updateNextPrayer();
+}
 
-// ---------- Sheet ----------
+main.addEventListener('click', e => {
+  const blk = e.target.closest('[data-id]');
+  if (blk) { openEditor(blk.dataset.date, blk.dataset.id); return; }
+  const c = e.target.closest('.cell[data-date], .wk-head [data-date], .wk-col[data-date]');
+  if (c) openDay(c.dataset.date);
+});
+function shift(dir) {
+  if (ui.mode === 'week') cursor.setDate(cursor.getDate() + 7 * dir);
+  else { cursor.setDate(1); cursor.setMonth(cursor.getMonth() + dir); }
+  render();
+}
+document.getElementById('prev').onclick = () => shift(-1);
+document.getElementById('next').onclick = () => shift(1);
+document.getElementById('today').onclick = () => { cursor = new Date(); cursor.setHours(0, 0, 0, 0); delete ui.wkScroll; render(); };
+document.getElementById('vMonth').onclick = () => { ui.mode = 'month'; saveUI(); render(); };
+document.getElementById('vWeek').onclick = () => { ui.mode = 'week'; saveUI(); render(); };
+function bindSwipe(el) {
+  let sx = null, sy = null;
+  el.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive:true });
+  el.addEventListener('touchend', e => {
+    if (sx === null) return; const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
+    if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) shift(dx < 0 ? 1 : -1);
+  });
+}
+function updateNextPrayer() {
+  const np = nextPrayer();
+  document.getElementById('nextPrayer').innerHTML = np ? `Next prayer: <span class="np">${np.name} ${fmtTime(np.time)}</span> · Alexandria` : '';
+}
+
+/* ================= Sheet + toast ================= */
 const sheet = document.getElementById('sheet'), overlay = document.getElementById('overlay');
-const body = document.getElementById('sheetBody'), titleEl = document.getElementById('sheetTitle');
-const backBtn = document.getElementById('sheetBack');
-let backAction = null;
-
-function showSheet(title, html, back) {
-  titleEl.textContent = title; body.innerHTML = html; body.scrollTop = 0;
+const body = document.getElementById('sheetBody'), titleEl = document.getElementById('sheetTitle'), backBtn = document.getElementById('sheetBack');
+let backAction = null, sheetMode = null, sheetDay = null;
+function showSheet(title, html, back, mode) {
+  titleEl.textContent = title; body.innerHTML = html; body.scrollTop = 0; sheetMode = mode || 'other';
   backAction = back || null; backBtn.style.visibility = back ? 'visible' : 'hidden';
   sheet.classList.add('open'); overlay.classList.add('open');
 }
-function closeSheet() { sheet.classList.remove('open'); overlay.classList.remove('open'); render(); }
+function closeSheet() { sheet.classList.remove('open'); overlay.classList.remove('open'); sheetMode = null; render(); }
 overlay.onclick = closeSheet;
 document.getElementById('sheetClose').onclick = closeSheet;
 backBtn.onclick = () => backAction && backAction();
 
-function dayTitle(date) {
-  const [y, m, d] = date.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+let toastTimer;
+function toast(msg, undoFn, ms = 6000) {
+  const t = document.getElementById('toast'), b = document.getElementById('toastBtn');
+  document.getElementById('toastMsg').textContent = msg;
+  b.style.display = undoFn ? '' : 'none';
+  b.onclick = () => { undoFn(); t.classList.remove('show'); };
+  t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+// Make a change that can be undone from the toast
+function withUndo(msg, change, after) {
+  const before = JSON.stringify(db);
+  change(); persist(); render(); after && after();
+  toast(msg, () => { db = normalize(JSON.parse(before)); persist(); render(); if (sheetMode === 'day') openDay(sheetDay); else if (sheetMode) closeSheet(); }, 8000);
 }
 
-// Day detail
+/* ================= Day view ================= */
 function openDay(date) {
-  const list = entriesFor(date);
-  let html = list.length ? '' : '<div class="empty-msg">Nothing planned yet.</div>';
+  sheetDay = date;
+  const pt = prayerTimes(date), np = nextPrayer();
+  let html = '<div class="prayers">' + PRAYERS.map(([k, n]) =>
+    `<div class="${np && np.date === date && np.k === k ? 'next' : ''}">${n}<b>${fmtTime(pt[k])}</b></div>`).join('') + '</div>';
+  const list = entriesFor(date, true);
+  if (!list.length) html += '<div class="empty-msg">Nothing planned yet.</div>';
   list.forEach(e => {
-    const p = place(e.placeId);
-    html += `<div class="entry" data-id="${e.id}" style="border-left-color:${p.color}">
-      <div class="top"><span style="color:${p.color}">${esc(p.name)}</span><span class="tm" style="color:${p.color}">${fmtRange(e.start, e.end)}</span></div>
-      ${(e.tasks || []).filter(Boolean).length ? '<ul>' + e.tasks.filter(Boolean).map(t => `<li>${esc(t)}</li>`).join('') + '</ul>' : ''}
+    const p = place(e.placeId), done = doneSet(e, date);
+    html += `<div class="entry" style="border-left-color:${esc(p.color)}">
+      <div class="top" data-edit="${e.id}"><span><span style="color:${esc(p.color)}">${esc(p.name)}</span>
+        <span class="tm" style="color:${esc(p.color)}">${fmtRange(e.start, e.end)}</span>
+        ${e.repeat ? `<small>↻ ${repeatText(e.repeat)}</small>` : ''}</span><span class="edit">Edit</span></div>
+      ${e.tasks.map((t, i) => t ? `<label class="chk"><input type="checkbox" data-e="${e.id}" data-i="${i}" ${done.has(i) ? 'checked' : ''}><span class="${done.has(i) ? 'done' : ''}">${esc(t)}</span></label>` : '').join('')}
       ${e.note ? `<div class="note">${esc(e.note)}</div>` : ''}
+      ${e.remind != null ? `<div class="meta">🔔 ${remindLabel(e.remind)}</div>` : ''}
     </div>`;
   });
   html += `<button class="primary" id="addEntry">+ Add</button>`;
-  showSheet(dayTitle(date), html);
-  body.querySelectorAll('.entry').forEach(el => el.onclick = () => openEditor(date, el.dataset.id));
+  const missing = db.entries.filter(e => e.repeat && !occurs(e, date));
+  if (missing.length) html += `<div class="lbl">Add a repeating item to this day only</div><div class="quick">` +
+    missing.map(e => `<button data-q="${e.id}" style="color:${esc(place(e.placeId).color)}">+ ${esc(place(e.placeId).name)} ${fmtRange(e.start, e.end)}</button>`).join('') + '</div>';
+  showSheet(longDate(date), html, null, 'day');
+
+  body.querySelectorAll('[data-edit]').forEach(el => el.onclick = () => openEditor(date, el.dataset.edit));
+  body.querySelectorAll('.chk input').forEach(cb => cb.onchange = () => {
+    const e = db.entries.find(x => x.id === cb.dataset.e), i = +cb.dataset.i, s = doneSet(e, date);
+    cb.checked ? s.add(i) : s.delete(i);
+    if (s.size) e.done[date] = [...s]; else delete e.done[date];
+    cb.nextElementSibling.classList.toggle('done', cb.checked);
+    persist(); render();
+  });
+  body.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
+    const e = db.entries.find(x => x.id === b.dataset.q);
+    withUndo(`Added ${place(e.placeId).name} to ${shortDate(date)}`, () => {
+      e.skip = e.skip.filter(d => d !== date);
+      if (!occurs(e, date)) e.extra.push(date);
+    }, () => openDay(date));
+  });
   document.getElementById('addEntry').onclick = () => openEditor(date);
 }
 
-// Add / edit entry
+/* ================= Editor ================= */
+function ask(title, msg, options, back) {   // options: [{label, cls, fn}]
+  showSheet(title, `<div class="box">${msg}</div><div style="height:12px"></div>` +
+    options.map((o, i) => `<button class="${o.cls || 'secondary'}" data-o="${i}">${o.label}</button>`).join(''), back);
+  body.querySelectorAll('[data-o]').forEach(b => b.onclick = () => options[+b.dataset.o].fn());
+}
+
 function openEditor(date, id) {
-  const e = id ? db.entries.find(x => x.id === id)
-               : { id: null, date, placeId: db.places[0]?.id || '', start: '', end: '', tasks: [''], note: '' };
-  const opts = db.places.map(p => `<option value="${p.id}" ${p.id === e.placeId ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+  const orig = id ? db.entries.find(x => x.id === id) : null;
+  if (id && !orig) return openDay(date);
+  const firstPlace = db.places[0];
+  const e = orig ? clone(orig) : { date, placeId:firstPlace?.id || '', start:'', end:'', tasks:[''], note:'',
+    remind:firstPlace ? firstPlace.remind : null, repeat:null, skip:[], extra:[], done:{} };
+  const r = e.repeat || { freq:'none', days:[parse(date).getDay()], until:'' };
   const html = `
     <label>Place</label>
-    <select id="fPlace">${opts}<option value="__new">+ New place…</option></select>
+    <select id="fPlace">${db.places.map(p => `<option value="${esc(p.id)}" ${p.id === e.placeId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}<option value="__new">+ New place…</option></select>
+    <div id="fNewPlace" style="display:none;margin-top:8px" class="place-row"><input type="color" id="fNewColor" value="#e0533d"><input type="text" id="fNewName" placeholder="New place name"></div>
     <div class="row">
-      <div><label>Start</label><input type="time" id="fStart" value="${e.start || ''}"></div>
-      <div><label>End</label><input type="time" id="fEnd" value="${e.end || ''}"></div>
+      <div><label>Start</label><input type="time" id="fStart" value="${esc(e.start)}"></div>
+      <div><label>End</label><input type="time" id="fEnd" value="${esc(e.end)}"></div>
     </div>
-    <label>Tasks</label>
-    <div id="fTasks"></div>
+    <label>Tasks</label><div id="fTasks"></div>
     <button class="add-small" id="fAddTask">+ Add task</button>
-    <label>Notes</label>
-    <textarea id="fNote" placeholder="Optional">${esc(e.note)}</textarea>
-    <div style="height:14px"></div>
+    <label>Notes</label><textarea id="fNote" placeholder="Optional">${esc(e.note)}</textarea>
+    <label>Reminder</label>
+    <select id="fRemind">${REMIND_OPTS.map(o => `<option value="${o}" ${o === e.remind ? 'selected' : ''}>${remindLabel(o)}</option>`).join('')}</select>
+    <label>Repeat</label>
+    <select id="fFreq">
+      <option value="none">Never (this day only)</option><option value="daily">Every day</option>
+      <option value="weekly">Every week on…</option><option value="monthly">Every month (same date)</option>
+    </select>
+    <div id="fRepeatBox">
+      <div id="fDaysWrap"><div class="days" id="fDays" style="margin-top:8px">${DAYS.map((d, i) => `<button data-dow="${COL2DOW[i]}" class="${r.days.includes(COL2DOW[i]) ? 'on' : ''}">${d}</button>`).join('')}</div></div>
+      <div class="lbl">Until (optional)</div><input type="date" id="fUntil" value="${esc(r.until || '')}">
+      ${orig && orig.repeat ? `<div class="meta" style="margin-top:8px">Starts ${shortDate(orig.date)}${orig.skip.length ? ` · removed on ${orig.skip.length} day(s)` : ''}${orig.extra.length ? ` · added on ${orig.extra.length} extra day(s)` : ''}</div>` : ''}
+    </div>
+    <div style="height:16px"></div>
     <button class="primary" id="fSave">Save</button>
-    ${id ? '<button class="danger" id="fDelete">Delete</button>' : ''}`;
-  showSheet(id ? 'Edit' : 'New', html, () => openDay(date));
+    ${orig ? `<div class="two"><button class="secondary" id="fCopy">Copy to…</button><button class="secondary" id="fMove">Move to…</button></div>
+      <button class="danger" id="fDelete">Delete</button>` : ''}`;
+  showSheet(orig ? 'Edit' : 'New', html, () => openDay(date), 'edit');
 
   const tasksEl = document.getElementById('fTasks');
   const addTask = (v = '') => {
-    const r = document.createElement('div'); r.className = 'task-row';
-    r.innerHTML = `<input type="text" placeholder="e.g. pt diagnosis" value="${esc(v)}"><button aria-label="Remove">−</button>`;
-    r.querySelector('button').onclick = () => r.remove();
-    tasksEl.appendChild(r); return r;
+    const row = document.createElement('div'); row.className = 'task-row';
+    row.innerHTML = `<input type="text" placeholder="e.g. pt diagnosis"><button aria-label="Remove">−</button>`;
+    row.querySelector('input').value = v; row.querySelector('button').onclick = () => row.remove();
+    tasksEl.appendChild(row); return row;
   };
-  (e.tasks && e.tasks.length ? e.tasks : ['']).forEach(t => addTask(t));
+  (e.tasks.length ? e.tasks : ['']).forEach(t => addTask(t));
   document.getElementById('fAddTask').onclick = () => addTask().querySelector('input').focus();
+
+  const freq = document.getElementById('fFreq'); freq.value = e.repeat ? e.repeat.freq : 'none';
+  const syncRepeatUI = () => {
+    document.getElementById('fRepeatBox').style.display = freq.value === 'none' ? 'none' : '';
+    document.getElementById('fDaysWrap').style.display = freq.value === 'weekly' ? '' : 'none';
+  };
+  freq.onchange = syncRepeatUI; syncRepeatUI();
+  document.getElementById('fDays').onclick = ev => { const b = ev.target.closest('button'); if (b) b.classList.toggle('on'); };
 
   const sel = document.getElementById('fPlace');
   sel.onchange = () => {
-    if (sel.value !== '__new') return;
-    const name = prompt('Place name'); if (!name || !name.trim()) { sel.value = db.places[0]?.id || ''; return; }
-    const colors = ['#e0533d','#f29d38','#2a9d8f','#e76fa3','#5a6acf','#8a5a2b','#3aa0d8'];
-    const p = { id: uid(), name: name.trim(), color: colors[db.places.length % colors.length] };
-    db.places.push(p); save();
-    sel.insertAdjacentHTML('afterbegin', `<option value="${p.id}">${esc(p.name)}</option>`); sel.value = p.id;
+    if (sel.value !== '__new' && !orig) document.getElementById('fRemind').value = String(place(sel.value).remind);
+  };
+  sel.addEventListener('change', () => {
+    document.getElementById('fNewPlace').style.display = sel.value === '__new' ? '' : 'none';
+    if (sel.value === '__new') document.getElementById('fNewName').focus();
+  });
+
+  const readForm = () => {
+    const f = freq.value, rem = document.getElementById('fRemind').value;
+    return {
+      placeId: sel.value, start: document.getElementById('fStart').value, end: document.getElementById('fEnd').value,
+      tasks: [...tasksEl.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean),
+      note: document.getElementById('fNote').value.trim(), remind: rem === 'null' ? null : +rem,
+      repeat: f === 'none' ? null : { freq:f, until:document.getElementById('fUntil').value,
+        days: f === 'weekly' ? [...document.querySelectorAll('#fDays .on')].map(b => +b.dataset.dow) : [] }
+    };
   };
 
   document.getElementById('fSave').onclick = () => {
-    if (!sel.value || sel.value === '__new') { alert('Choose a place'); return; }
-    const data = {
-      date, placeId: sel.value,
-      start: document.getElementById('fStart').value, end: document.getElementById('fEnd').value,
-      tasks: [...tasksEl.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean),
-      note: document.getElementById('fNote').value.trim()
-    };
-    if (id) Object.assign(e, data); else db.entries.push({ id: uid(), ...data });
-    save(); render(); openDay(date);
+    if (sel.value === '__new') {
+      const name = document.getElementById('fNewName').value.trim();
+      if (!name) return toast('Type a name for the new place');
+      const p = { id:uid(), name, color:document.getElementById('fNewColor').value, remind:null };
+      db.places.push(p);
+      sel.insertAdjacentHTML('afterbegin', `<option value="${p.id}">${esc(p.name)}</option>`); sel.value = p.id;
+      document.getElementById('fNewPlace').style.display = 'none';
+    }
+    const data = readForm();
+    if (!data.placeId) return toast('Choose a place');
+    if (data.repeat && data.repeat.freq === 'weekly' && !data.repeat.days.length) return toast('Pick at least one day to repeat on');
+    if (!orig) {
+      withUndo('Added', () => db.entries.push({ ...e, ...data, id:uid(), date }), () => openDay(date));
+    } else if (orig.repeat) {
+      ask('Save changes', 'This is a repeating item. Apply your changes to:', [
+        { label:`This day only (${shortDate(date)})`, cls:'primary', fn:() => withUndo('Changed for this day', () => {
+            orig.extra = orig.extra.filter(d => d !== date); orig.skip.push(date);
+            db.entries.push({ ...data, repeat:null, id:uid(), date, skip:[], extra:[], done: orig.done[date] ? { [date]: orig.done[date] } : {} });
+          }, () => openDay(date)) },
+        { label:'All days in the series', fn:() => withUndo('Series updated', () => Object.assign(orig, data, { date: data.repeat ? orig.date : date }), () => openDay(date)) },
+      ], () => openEditor(date, id));
+    } else {
+      withUndo('Saved', () => Object.assign(orig, data, { date }), () => openDay(date));
+    }
   };
-  if (id) document.getElementById('fDelete').onclick = () => {
-    if (!confirm('Delete this?')) return;
-    db.entries = db.entries.filter(x => x.id !== id); save(); render(); openDay(date);
+
+  if (!orig) return;
+  document.getElementById('fDelete').onclick = () => {
+    if (orig.repeat) ask('Delete', `Remove <b>${esc(place(orig.placeId).name)}</b> from:`, [
+      { label:`This day only (${shortDate(date)})`, cls:'primary', fn:() => withUndo('Removed from this day', () => {
+          orig.extra = orig.extra.filter(d => d !== date); if (occurs(orig, date)) orig.skip.push(date);
+        }, () => openDay(date)) },
+      { label:'Every day (delete the whole series)', cls:'danger', fn:() => withUndo('Series deleted', () => { db.entries = db.entries.filter(x => x !== orig); }, () => openDay(date)) },
+    ], () => openEditor(date, id));
+    else ask('Delete', `Delete <b>${esc(place(orig.placeId).name)} ${fmtRange(orig.start, orig.end)}</b> on ${shortDate(date)}?`, [
+      { label:'Delete', cls:'danger', fn:() => withUndo('Deleted', () => { db.entries = db.entries.filter(x => x !== orig); }, () => openDay(date)) },
+      { label:'Cancel', fn:() => openEditor(date, id) },
+    ], () => openEditor(date, id));
+  };
+  document.getElementById('fCopy').onclick = () => openTransfer(date, orig, 'copy');
+  document.getElementById('fMove').onclick = () => openTransfer(date, orig, 'move');
+}
+
+/* ===== Copy / move: pick a day, confirm, then Undo is available ===== */
+function openTransfer(from, e, kind) {
+  const p = place(e.placeId), verb = kind === 'copy' ? 'Copy' : 'Move';
+  const summary = `<b style="color:${esc(p.color)}">${esc(p.name)}</b> <span class="tm">${fmtRange(e.start, e.end)}</span>` +
+    (e.tasks.length ? `<br>${e.tasks.map(esc).join(', ')}` : '');
+  showSheet(`${verb} to another day`, `
+    <div class="box">${summary}<div class="meta">From ${longDate(from)}</div></div>
+    <label>${verb} to</label><input type="date" id="tDate">
+    <div class="box" id="tCheck" style="display:none"></div>
+    ${e.repeat ? `<div class="meta" style="margin-top:8px">This is a repeating item: only ${shortDate(from)} is ${kind === 'copy' ? 'copied' : 'moved'}. The rest of the series stays as it is.</div>` : ''}
+    <div style="height:14px"></div>
+    <button class="primary" id="tGo" disabled>Choose a day first</button>
+    <button class="secondary" id="tCancel">Cancel</button>`, () => openEditor(from, e.id), 'other');
+  const inp = document.getElementById('tDate'), go = document.getElementById('tGo'), chk = document.getElementById('tCheck');
+  const endMin = x => toMin(x.end) ?? toMin(x.start) + 60;
+  inp.oninput = () => {
+    const to = inp.value;
+    if (!to || to === from) { go.disabled = true; go.textContent = to === from ? 'Pick a different day' : 'Choose a day first'; chk.style.display = 'none'; return; }
+    const clash = e.start ? entriesFor(to, true).filter(x => x !== e && x.start && toMin(x.start) < endMin(e) && toMin(e.start) < endMin(x)) : [];
+    chk.style.display = ''; chk.innerHTML = `${verb} to <b>${longDate(to)}</b>?` +
+      (clash.length ? `<div class="warn" style="margin-top:6px">⚠️ Overlaps with ${clash.map(x => esc(place(x.placeId).name) + ' ' + fmtRange(x.start, x.end)).join(', ')}</div>` : '');
+    go.disabled = false; go.textContent = `Yes, ${verb.toLowerCase()} to ${shortDate(to)}`;
+  };
+  document.getElementById('tCancel').onclick = () => openEditor(from, e.id);
+  go.onclick = () => {
+    const to = inp.value; if (!to || to === from) return;
+    withUndo(`${kind === 'copy' ? 'Copied' : 'Moved'} to ${shortDate(to)}`, () => {
+      const copy = { ...clone(e), id:uid(), date:to, repeat:null, skip:[], extra:[], done:{} };
+      db.entries.push(copy);
+      if (kind === 'move') {
+        if (e.done[from]) copy.done[to] = e.done[from];
+        if (e.repeat) { e.extra = e.extra.filter(d => d !== from); if (occurs(e, from)) e.skip.push(from); }
+        else db.entries = db.entries.filter(x => x !== e);
+      }
+    }, () => openDay(kind === 'move' ? to : from));
   };
 }
 
-// Places & colours
-function openPlaces() {
-  const rows = db.places.map(p => `
-    <div class="place-row" data-id="${p.id}">
-      <input type="color" value="${p.color}"><input type="text" value="${esc(p.name)}">
-      <button aria-label="Delete">−</button>
-    </div>`).join('');
+/* ================= Search ================= */
+function openSearch() {
+  showSheet('Search', `<input type="search" id="q" placeholder="Patient, task, place, note…" autocomplete="off"><div id="results"></div>`, null, 'other');
+  const q = document.getElementById('q'), out = document.getElementById('results');
+  q.oninput = () => {
+    const term = q.value.trim().toLowerCase();
+    if (!term) { out.innerHTML = ''; return; }
+    const today = todayIso();
+    const rows = db.entries.filter(e => [place(e.placeId).name, e.note, ...e.tasks].some(s => (s || '').toLowerCase().includes(term)))
+      .map(e => {
+        let date = e.date;
+        if (e.repeat) { date = null; for (let i = 0; i < 400; i++) { const d = addDays(today, i); if (occurs(e, d)) { date = d; break; } } }
+        return { e, date };
+      }).sort((a, b) => (a.date || '9').localeCompare(b.date || '9'));
+    out.innerHTML = rows.length ? rows.map(({ e, date }) => `<div class="res" data-d="${date || ''}">
+      <b style="color:${esc(place(e.placeId).color)}">${esc(place(e.placeId).name)}</b> <span class="tm">${fmtRange(e.start, e.end)}</span>
+      ${e.tasks.length ? '<br>' + e.tasks.map(esc).join(', ') : ''}
+      <small>${e.repeat ? `↻ ${repeatText(e.repeat)}${date ? ' · next ' + shortDate(date) : ''}` : longDate(e.date)}</small></div>`).join('')
+      : '<div class="empty-msg">No matches.</div>';
+    out.querySelectorAll('.res').forEach(r => r.onclick = () => { if (r.dataset.d) { cursor = parse(r.dataset.d); render(); openDay(r.dataset.d); } });
+  };
+  setTimeout(() => q.focus(), 250);
+}
+document.getElementById('searchBtn').onclick = openSearch;
+
+/* ================= Reminders ================= */
+function openReminders() {
+  const placeOpts = `<option value="all">All places</option>` + db.places.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+  showSheet('Reminders', `
+    <div class="meta">To remind you of one item only, open it and pick a reminder in Edit. Use this to set reminders for many items at once.</div>
+    <label>Set reminders for</label><select id="rPlace">${placeOpts}</select>
+    <label>Remind me</label><select id="rWhen">${REMIND_OPTS.map(o => `<option value="${o}" ${o === 30 ? 'selected' : ''}>${remindLabel(o)}</option>`).join('')}</select>
+    <div style="height:12px"></div>
+    <button class="primary" id="rApply">Apply</button>
+    <div class="meta" style="margin-top:6px">Applies to everything already planned for that place, and to new items you add there.</div>
+
+    <div class="lbl" style="margin-top:24px">Get alerts when the app is closed</div>
+    <div class="box">Reminders pop up here while the app is open. To be alerted when it's closed, add them to your iPhone/iPad Calendar, and repeat after big changes.</div>
+    <label>Which places</label><select id="xPlace">${placeOpts}</select>
+    <button class="secondary" id="rExport">📅 Add next 3 months to Calendar</button>
+    ${perm === 'default' ? '<button class="secondary" id="rPerm">Allow pop-up notifications</button>' : ''}`, null, 'other');
+  document.getElementById('rApply').onclick = () => {
+    const pid = document.getElementById('rPlace').value, v = document.getElementById('rWhen').value, val = v === 'null' ? null : +v;
+    withUndo(`Reminders set: ${remindLabel(val)}`, () => {
+      db.entries.forEach(e => { if (pid === 'all' || e.placeId === pid) e.remind = val; });
+      db.places.forEach(p => { if (pid === 'all' || p.id === pid) p.remind = val; });
+    });
+  };
+  document.getElementById('rExport').onclick = () => exportICS(document.getElementById('xPlace').value);
+  const pb = document.getElementById('rPerm');
+  if (pb) pb.onclick = async () => { try { await Notification.requestPermission(); } catch (e) {} openReminders(); };
+}
+document.getElementById('remBtn').onclick = openReminders;
+
+const icsEsc = s => String(s || '').replace(/\\/g, '\\\\').replace(/[,;]/g, m => '\\' + m).replace(/\n/g, '\\n');
+const fmtHM = m => `${pad(Math.min(23, Math.floor(m / 60)))}:${pad(m % 60)}`;
+function buildICS(pid, from, days) {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Timetable//EN', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Timetable'];
+  let n = 0;
+  for (let i = 0; i < days; i++) {
+    const date = addDays(from, i), ymd = date.replace(/-/g, '');
+    entriesFor(date, true).forEach(e => {
+      if (e.remind == null || (pid !== 'all' && e.placeId !== pid)) return;
+      const p = place(e.placeId);
+      lines.push('BEGIN:VEVENT', `UID:${e.id}-${ymd}@timetable`, `DTSTAMP:${stamp}`);
+      if (e.start) {
+        const end = e.end || fmtHM(toMin(e.start) + 60);
+        lines.push(`DTSTART;TZID=Africa/Cairo:${ymd}T${e.start.replace(':', '')}00`, `DTEND;TZID=Africa/Cairo:${ymd}T${end.replace(':', '')}00`);
+      } else lines.push(`DTSTART;VALUE=DATE:${ymd}`, `DTEND;VALUE=DATE:${addDays(date, 1).replace(/-/g, '')}`);
+      lines.push(`SUMMARY:${icsEsc(p.name)}`, `DESCRIPTION:${icsEsc([...e.tasks, e.note].filter(Boolean).join('\n'))}`,
+        'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsEsc(p.name)}`, `TRIGGER:-PT${e.remind}M`, 'END:VALARM', 'END:VEVENT');
+      n++;
+    });
+  }
+  lines.push('END:VCALENDAR');
+  return { text: lines.join('\r\n'), n };
+}
+async function exportICS(pid) {
+  const { text, n } = buildICS(pid, todayIso(), 92);
+  if (!n) return toast('No items with reminders in the next 3 months');
+  await saveFile('timetable-reminders.ics', text, 'text/calendar');
+}
+
+const fired = new Set();
+function checkReminders() {
+  const now = Date.now();
+  [todayIso(), addDays(todayIso(), 1)].forEach(date => entriesFor(date, true).forEach(e => {
+    if (e.remind == null) return;
+    const d = parse(date); d.setMinutes(toMin(e.start) ?? 8 * 60);
+    const at = d.getTime() - e.remind * 60000, key = e.id + date + e.remind;
+    if (now >= at && now < at + 15 * 60000 && !fired.has(key)) {
+      fired.add(key);
+      const msg = `⏰ ${place(e.placeId).name}${e.start ? ' at ' + fmtTime(e.start) : ''}${date !== todayIso() ? ' tomorrow' : ''}`;
+      toast(msg, null, 15000);
+      try { if ('Notification' in window && Notification.permission === 'granted') new Notification(msg, { body: e.tasks.join(', ') }); } catch (er) {}
+    }
+  }));
+}
+
+/* ================= Places & settings ================= */
+function openSettings() {
+  const rows = db.places.map(p => `<div class="place-row" data-id="${esc(p.id)}"><input type="color" value="${esc(p.color)}"><input type="text"><button aria-label="Delete">−</button></div>`).join('');
   showSheet('Places & colors', `
     <div id="pl">${rows}</div>
-    <button class="add-small" id="plAdd" style="margin-top:10px">+ Add place</button>
-    <div style="height:14px"></div>
-    <button class="primary" id="plSave">Save</button>
-    <button class="secondary" id="exp">Back up data (download)</button>
-    <button class="secondary" id="imp">Restore from backup</button>
-    <input type="file" id="impFile" accept="application/json" style="display:none">`);
-
+    <button class="add-small" id="plAdd" style="margin-top:8px">+ Add place</button>
+    <div style="height:12px"></div><button class="primary" id="plSave">Save</button>
+    <div class="lbl" style="margin-top:24px">Backup</div>
+    <div class="two"><button class="secondary" id="exp">Download backup</button><button class="secondary" id="imp">Restore backup</button></div>
+    <input type="file" id="impFile" accept="application/json,.json" style="display:none">
+    <div class="meta" style="margin-top:14px">Prayer times are calculated for Alexandria (Egyptian General Authority of Survey method) and follow summer/winter time automatically. They may differ by a minute or two from your local mosque.</div>`, null, 'other');
   const pl = document.getElementById('pl');
+  pl.querySelectorAll('.place-row').forEach(r => r.querySelector('input[type=text]').value = place(r.dataset.id).name);
   const wire = r => r.querySelector('button').onclick = () => {
     const pid = r.dataset.id;
-    if (pid && db.entries.some(e => e.placeId === pid) && !confirm('This place is used in your calendar. Delete anyway?')) return;
+    if (pid && db.entries.some(e => e.placeId === pid) && !r.dataset.warned) {
+      r.dataset.warned = 1; toast('This place is used in your calendar. Tap − again to remove it.'); return;
+    }
     r.remove();
   };
   pl.querySelectorAll('.place-row').forEach(wire);
@@ -348,31 +799,81 @@ function openPlaces() {
     const r = pl.lastElementChild; wire(r); r.querySelector('input[type=text]').focus();
   };
   document.getElementById('plSave').onclick = () => {
-    db.places = [...pl.querySelectorAll('.place-row')].map(r => ({
-      id: r.dataset.id || uid(),
-      color: r.querySelector('input[type=color]').value,
-      name: r.querySelector('input[type=text]').value.trim()
-    })).filter(p => p.name);
-    save(); closeSheet();
+    const places = [...pl.querySelectorAll('.place-row')].map(r => {
+      const old = db.places.find(p => p.id === r.dataset.id);
+      return { id:r.dataset.id || uid(), color:r.querySelector('input[type=color]').value, name:r.querySelector('input[type=text]').value.trim(), remind:old ? old.remind : null };
+    }).filter(p => p.name);
+    withUndo('Places saved', () => { db.places = places; ui.filter = ui.filter.filter(id => places.some(p => p.id === id)); saveUI(); }, closeSheet);
   };
-  document.getElementById('exp').onclick = () => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' }));
-    a.download = `timetable-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click();
-  };
+  document.getElementById('exp').onclick = () => saveFile(`timetable-backup-${todayIso()}.json`, JSON.stringify(db, null, 2), 'application/json');
   const f = document.getElementById('impFile');
   document.getElementById('imp').onclick = () => f.click();
   f.onchange = async () => {
     try {
-      const d = JSON.parse(await f.files[0].text());
-      if (!d.places || !d.entries) throw 0;
-      if (confirm('Replace current data with this backup?')) { db = d; save(); closeSheet(); }
-    } catch (e) { alert('That file is not a valid backup.'); }
+      const d = JSON.parse(await f.files[0].text()); if (!d.places || !d.entries) throw 0;
+      withUndo('Backup restored', () => { db = normalize(d); }, closeSheet);
+    } catch (e) { toast('That file is not a valid backup.'); }
   };
 }
-document.getElementById('placesBtn').onclick = openPlaces;
+document.getElementById('setBtn').onclick = openSettings;
 
+/* ================= Files ================= */
+let downloadsCap = null;
+async function saveFile(name, text, mime) {
+  if (downloadsCap) {
+    try { await downloadsCap.save({ filename:name, data:text }); return; }
+    catch (e) { toast('Download cancelled'); return; }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type:mime })); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ================= Cloud sync (when opened as a Claude page) ================= */
+let remoteRef = null, writing = false, pending = false, pushTimer = null;
+const setSync = t => { document.getElementById('sync').textContent = t; };
+function schedulePush() { if (!remoteRef) return; clearTimeout(pushTimer); pushTimer = setTimeout(pushRemote, 700); }
+async function pushRemote() {
+  if (!remoteRef) return;
+  if (writing) { pending = true; return; }
+  writing = true; setSync('Syncing…');
+  try { await remoteRef.set({ json: JSON.stringify(db), updated: db.updated }); setSync('☁︎ Synced'); }
+  catch (e) { setSync(e && e.code === 'quota_exceeded' ? '⚠️ Cloud storage full' : 'Saved on this device'); }
+  writing = false;
+  if (pending) { pending = false; pushRemote(); }
+}
+async function initCloud() {
+  if (!(window.claude && typeof window.claude.use === 'function')) return;
+  window.claude.use('downloads').then(d => { downloadsCap = d; }).catch(() => {});
+  let cdb, user;
+  try { [cdb, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]); } catch (e) { return; }
+  if (!cdb || !user) return;
+  const id = await user.id(); if (!id) return;
+  remoteRef = cdb.doc(`data/users/${id}/timetable`);
+  setSync('Connecting…');
+  const timer = setTimeout(() => setSync('Offline · saved on this device'), 10000);
+  remoteRef.onSnapshot(snap => {
+    if (!snap.metadata.fromCache) clearTimeout(timer);
+    if (snap.metadata.hasPendingWrites) return;
+    if (!snap.exists) { if (!snap.metadata.fromCache) pushRemote(); return; }
+    let r; try { r = JSON.parse(snap.data().json); } catch (e) { return; }
+    if ((r.updated || 0) > db.updated) {
+      db = normalize(r); saveLocal();
+      if (sheetMode === 'day') openDay(sheetDay); else if (!sheetMode) render(); else renderChips();
+    } else if ((r.updated || 0) < db.updated) { pushRemote(); return; }
+    if (!snap.metadata.fromCache) setSync('☁︎ Synced');
+  }, () => { clearTimeout(timer); remoteRef = null; setSync('Saved on this device'); });
+}
+
+/* ================= Start ================= */
 render();
+initCloud();
+let lastDay = todayIso();
+setInterval(() => {
+  checkReminders(); updateNextPrayer();
+  if (todayIso() !== lastDay) { lastDay = todayIso(); if (!sheetMode) render(); }
+}, 30000);
+setTimeout(checkReminders, 1500);
 </script>
 </body>
 </html>
