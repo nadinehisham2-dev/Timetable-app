@@ -1525,8 +1525,8 @@ document.getElementById('undoBtn').onclick = undo;
 document.getElementById('redoBtn').onclick = redo;
 render();
 initCloud();
-// Offline mode is switched off for now: remove any old offline copy
-try { if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {}); } catch (e) {}
+// Offline mode for the installed app (GitHub Pages)
+try { if ('serviceWorker' in navigator && location.protocol === 'https:' && /github\.io$/.test(location.hostname)) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
 let lastDay = todayIso();
 // When the day changes (or the app is reopened later), follow it: a new week or month moves the view along,
 // unless you were looking at a different week/month on purpose.
