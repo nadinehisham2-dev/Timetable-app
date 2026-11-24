@@ -1516,10 +1516,19 @@ initCloud();
 // Offline mode is switched off for now: remove any old offline copy
 try { if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {}); } catch (e) {}
 let lastDay = todayIso();
-setInterval(() => {
-  checkReminders(); updateNextPrayer();
-  if (todayIso() !== lastDay) { lastDay = todayIso(); if (!sheetMode) render(); }
-}, 30000);
+// When the day changes (or the app is reopened later), follow it: a new week or month moves the view along,
+// unless you were looking at a different week/month on purpose.
+function followToday() {
+  const t = todayIso(); if (t === lastDay) return;
+  const wsOf = iso => { const d = parse(iso); d.setDate(d.getDate() - (d.getDay() + 1) % 7); return isoOf(d); };
+  const wasCurrent = ui.mode === 'week' ? wsOf(lastDay) === weekStart()
+    : parse(lastDay).getMonth() === cursor.getMonth() && parse(lastDay).getFullYear() === cursor.getFullYear();
+  lastDay = t;
+  if (wasCurrent) { cursor = parse(t); }
+  if (!sheetMode) render(); else updateNextPrayer();
+}
+setInterval(() => { checkReminders(); followToday(); updateNextPrayer(); }, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { followToday(); updateNextPrayer(); checkReminders(); } });
 setTimeout(checkReminders, 1500);
 </script>
 </body>
