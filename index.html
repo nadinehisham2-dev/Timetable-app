@@ -8,6 +8,18 @@
 <meta name="apple-mobile-web-app-title" content="Timetable">
 <title>Timetable</title>
 <link rel="manifest" href="manifest.json">
+<script>
+  // If something goes wrong, show it on screen instead of a blank page
+  window.addEventListener('error', function (e) {
+    try {
+      var d = document.getElementById('errBox') || document.createElement('div');
+      d.id = 'errBox';
+      d.style.cssText = 'position:fixed;left:10px;right:10px;bottom:10px;z-index:99;background:#fee;color:#900;border:1px solid #c66;border-radius:10px;padding:10px;font:13px -apple-system,sans-serif';
+      d.textContent = 'Something went wrong: ' + (e.message || e) + (e.lineno ? ' (line ' + e.lineno + ')' : '') + '. Please send a screenshot of this to Claude.';
+      (document.body || document.documentElement).appendChild(d);
+    } catch (x) {}
+  });
+</script>
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <meta name="theme-color" content="#ffffff">
 <style>
@@ -1368,8 +1380,8 @@ async function initCloud() {
 applyTextSize();
 render();
 initCloud();
-// Offline mode when installed from the website (not available inside Claude)
-try { if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude/.test(location.hostname)) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
+// Offline mode is switched off for now: remove any old offline copy
+try { if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {}); } catch (e) {}
 let lastDay = todayIso();
 setInterval(() => {
   checkReminders(); updateNextPrayer();
