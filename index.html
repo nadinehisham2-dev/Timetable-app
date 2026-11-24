@@ -169,6 +169,10 @@
   .prayers div.next { outline:2px solid var(--prayer); }
 
   .entry { background:var(--soft); border-radius:12px; padding:10px 12px; margin-bottom:10px; border-left:6px solid #999; }
+  .entry { cursor:pointer; }
+  .entry .chk { cursor:default; }
+  .entry .chk input { cursor:pointer; }
+  input[type=time] { min-width:0; display:block; -webkit-appearance:none; appearance:none; min-height:44px; }
   .entry .top { display:flex; justify-content:space-between; align-items:center; gap:8px; font-weight:700; cursor:pointer; }
   .entry .top small { font-weight:400; color:var(--muted); font-size:12px; }
   .entry .edit { color:var(--accent); font-weight:500; font-size:14px; }
@@ -871,7 +875,13 @@ function showSheet(title, html, back, mode) {
 }
 function closeSheet() { sheet.classList.remove('open'); overlay.classList.remove('open'); sheetMode = null; render(); }
 overlay.onclick = closeSheet;
-document.getElementById('sheetClose').onclick = closeSheet;
+document.getElementById('sheetClose').onclick = () => {
+  if (sheetMode !== 'edit') return closeSheet();
+  // In the add/edit screen, Done saves (and closes once saved)
+  const btn = document.getElementById('fSave'); if (!btn) return closeSheet();
+  btn.click();
+  if (sheetMode === 'day') closeSheet();
+};
 backBtn.onclick = () => backAction && backAction();
 
 let toastTimer;
@@ -899,11 +909,11 @@ function openDay(date) {
   if (!list.length) html += '<div class="empty-msg">Nothing planned yet.</div>';
   list.forEach(e => {
     const p = place(e.placeId), done = doneSet(e, date);
-    html += `<div class="entry" style="border-left-color:${esc(p.color)}">
-      <div class="top" data-edit="${e.id}"><span><span style="color:${esc(p.color)}">${esc(p.name)}</span>
+    html += `<div class="entry" data-edit="${e.id}" style="border-left-color:${esc(p.color)}">
+      <div class="top"><span><span style="color:${esc(p.color)}">${esc(p.name)}</span>
         <span class="tm" style="color:${esc(p.color)}">${fmtRange(e.start, e.end)}</span>
-        </span><span class="edit">Edit</span></div>
-      ${e.tasks.map((t, i) => t ? `<label class="chk"><input type="checkbox" data-e="${e.id}" data-i="${i}" ${done.has(i) ? 'checked' : ''}><span class="${done.has(i) ? 'done' : ''}">${taskT(e, i) ? `<b class="tm ttm2">${fmtTime(taskT(e, i))}</b> ` : ''}${esc(t)}</span></label>` : '').join('')}
+        </span></div>
+      ${e.tasks.map((t, i) => t ? `<div class="chk"><input type="checkbox" data-e="${e.id}" data-i="${i}" ${done.has(i) ? 'checked' : ''}><span class="${done.has(i) ? 'done' : ''}">${taskT(e, i) ? `<b class="tm ttm2">${fmtTime(taskT(e, i))}</b> ` : ''}${esc(t)}</span></div>` : '').join('')}
       ${e.note ? `<div class="note">${esc(e.note)}</div>` : ''}
       ${e.remind != null ? `<div class="meta">🔔 ${remindLabel(e.remind)}</div>` : ''}
     </div>`;
@@ -916,7 +926,9 @@ function openDay(date) {
     missing.map(e => `<button data-q="${e.id}" style="color:${esc(place(e.placeId).color)}">+ ${esc(place(e.placeId).name)} ${fmtRange(e.start, e.end)}</button>`).join('') + '</div>';
   showSheet(longDate(date), html, null, 'day');
 
-  body.querySelectorAll('[data-edit]').forEach(el => el.onclick = () => openEditor(date, el.dataset.edit));
+  // Tap anywhere on a place card to edit it; only the checkbox itself ticks a task
+  body.querySelectorAll('[data-edit]').forEach(el => el.onclick = ev => { if (ev.target.closest('input[type=checkbox]')) return; openEditor(date, el.dataset.edit); });
+  body.querySelectorAll('.chk input').forEach(cb => cb.addEventListener('click', ev => ev.stopPropagation()));
   body.querySelectorAll('.chk input').forEach(cb => cb.onchange = () => {
     const e = db.entries.find(x => x.id === cb.dataset.e), i = +cb.dataset.i, s = doneSet(e, date);
     cb.checked ? s.add(i) : s.delete(i);
