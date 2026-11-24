@@ -93,6 +93,8 @@
   .num { align-self:flex-end; font-size:clamp(13px,2.5vw,23px); font-weight:500; width:1.7em; height:1.7em;
     display:flex; align-items:center; justify-content:center; border-radius:50%; margin-bottom:1px; flex:none; }
   .cell.we .num { color:var(--muted); }
+  .cell.focus .num { box-shadow:inset 0 0 0 2px var(--accent); color:var(--accent); }
+  .wk-head div.focus b { color:var(--accent); box-shadow:inset 0 0 0 2px var(--accent); border-radius:50%; width:30px; height:30px; line-height:30px; margin:0 auto; }
   .cell.today .num { background:var(--accent); color:#fff; }
   .items { flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
     scrollbar-width:thin; text-align:center; font-size:calc(clamp(8px,1.35vw,13px) * var(--ts,1)); line-height:1.3; }
@@ -547,6 +549,7 @@ function nextPrayer() {
 
 /* ================= Rendering ================= */
 let cursor = new Date(); cursor.setHours(0, 0, 0, 0);
+let pickedIso = null;   // the day you last opened, marked in both views
 const main = document.getElementById('main');
 
 function renderChips() {
@@ -582,7 +585,7 @@ function renderMonth() {
     const col = i % 7, d = i - offset + 1, we = WEEKEND.has(col) ? ' we' : '';
     if (d < 1 || d > days) { html += `<div class="cell empty${we}"></div>`; continue; }
     const date = iso(y, m, d);
-    html += `<div class="cell${we}${date === today ? ' today' : ''}" data-date="${date}"><div class="num">${d}</div><div class="items">${cellItems(date)}</div></div>`;
+    html += `<div class="cell${we}${date === today ? ' today' : ''}${date === pickedIso && date !== today ? ' focus' : ''}" data-date="${date}"><div class="num">${d}</div><div class="items">${cellItems(date)}</div></div>`;
   }
   main.innerHTML = `<div class="weekdays">${DAYS.map((d, i) => `<div class="${WEEKEND.has(i) ? 'we' : ''}">${d}</div>`).join('')}</div>
     <div class="grid" id="grid" style="grid-template-rows:repeat(${total / 7}, minmax(calc(var(--rowmin,74px) * var(--ts,1)),1fr))">${html}</div>`;
@@ -621,7 +624,7 @@ function renderWeek(fitH) {
   let head = '<div></div>', all = '<div>all-day</div>', cols = '';
   dates.forEach((date, i) => {
     const d = parse(date), we = WEEKEND.has(i) ? ' we' : '';
-    head += `<div class="${we}${date === today ? ' today' : ''}" data-date="${date}">${DAYS[i]}<b>${d.getDate()}</b></div>`;
+    head += `<div class="${we}${date === today ? ' today' : ''}${date === pickedIso && date !== today ? ' focus' : ''}" data-date="${date}">${DAYS[i]}<b>${d.getDate()}</b></div>`;
     let a = '', c = '';
     const list = entriesFor(date), lanes = layoutLanes(list), boxes = [];
     list.forEach(en => {
@@ -686,7 +689,12 @@ main.addEventListener('click', e => {
 });
 function shift(dir) {
   if (ui.mode === 'week') cursor.setDate(cursor.getDate() + 7 * dir);
-  else { cursor.setDate(1); cursor.setMonth(cursor.getMonth() + dir); }
+  else {
+    // new month: focus today if it's in that month, otherwise the 1st
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    const n = new Date(cursor.getFullYear(), cursor.getMonth() + dir, 1);
+    cursor = (t.getFullYear() === n.getFullYear() && t.getMonth() === n.getMonth()) ? t : n;
+  }
   render();
 }
 document.getElementById('prev').onclick = () => shift(-1);
@@ -883,6 +891,7 @@ function withUndo(msg, change, after) {
 /* ================= Day view ================= */
 function openDay(date) {
   sheetDay = date;
+  cursor = parse(date); pickedIso = date;   // month and week views both follow the day you last opened
   const pt = prayerTimes(date), np = nextPrayer();
   let html = '<div class="prayers">' + PRAYERS.map(([k, n]) =>
     `<div class="${np && np.date === date && np.k === k ? 'next' : ''}">${n}${db.prayerRemind[k] != null ? ' 🔔' : ''}<b>${fmtTime(pt[k])}</b></div>`).join('') + '</div>';
