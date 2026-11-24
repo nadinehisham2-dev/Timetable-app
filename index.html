@@ -1427,6 +1427,7 @@ function openSettings() {
     <div id="pl">${rows}</div>
     <button class="add-small" id="plAdd" style="margin-top:8px">+ Add place</button>
     <div style="height:12px"></div><button class="primary" id="plSave">Save</button>
+    ${supaOn() ? `<div class="lbl" style="margin-top:24px">Account & sync</div><button class="secondary" id="acBtn">${supa.session ? '☁︎ ' + esc(supa.session.user.email) : 'Sign in to sync your devices'}</button>` : ''}
     <div class="lbl" style="margin-top:24px">Text size in the calendar</div>
     <div class="seg" id="tsSeg" style="width:100%">${[[0.85,'Small'],[1,'Medium'],[1.2,'Large'],[1.45,'Extra large']].map(([v, l]) => `<button data-ts="${v}" class="${(ui.ts || 1) == v ? 'on' : ''}" style="flex:1">${l}</button>`).join('')}</div>
     <div class="lbl" style="margin-top:24px">Templates</div>
@@ -1449,6 +1450,7 @@ function openSettings() {
     pl.insertAdjacentHTML('beforeend', `<div class="place-row" data-id=""><input type="color" value="#3aa0d8"><input type="text" placeholder="Place name"><button aria-label="Delete">−</button></div>`);
     const r = pl.lastElementChild; wire(r); r.querySelector('input[type=text]').focus();
   };
+  const acB = document.getElementById('acBtn'); if (acB) acB.onclick = openAccount;
   document.getElementById('tsSeg').onclick = ev => { const b = ev.target.closest('button'); if (!b) return; ui.ts = +b.dataset.ts; saveUI(); applyTextSize(); document.querySelectorAll('#tsSeg button').forEach(x => x.classList.toggle('on', x === b)); render(); };
   document.querySelectorAll('#tplList [data-del]').forEach(b => b.onclick = () => withUndo('Template deleted', () => { db.templates = db.templates.filter(t => t.id !== b.dataset.del); }, openSettings));
   document.getElementById('plSave').onclick = () => {
@@ -1485,7 +1487,10 @@ async function saveFile(name, data, mime) {
 /* ================= Cloud sync (when opened as a Claude page) ================= */
 let remoteRef = null, writing = false, pending = false, pushTimer = null;
 const setSync = t => { document.getElementById('sync').textContent = t; };
-function schedulePush() { if (!remoteRef) return; clearTimeout(pushTimer); pushTimer = setTimeout(pushRemote, 700); }
+function schedulePush() {
+  if (remoteRef) { clearTimeout(pushTimer); pushTimer = setTimeout(pushRemote, 700); }
+  else if (supa.session) { clearTimeout(pushTimer); pushTimer = setTimeout(supaPush, 700); }
+}
 async function pushRemote() {
   if (!remoteRef) return;
   if (writing) { pending = true; return; }
@@ -1495,6 +1500,103 @@ async function pushRemote() {
   writing = false;
   if (pending) { pending = false; pushRemote(); }
 }
+/* ================= Account & sync (installed app, outside Claude) ================= */
+// Filled in once the Supabase project exists. Both values are safe to publish.
+const SUPA_URL = '';
+const SUPA_KEY = '';
+const SKEY = 'timetable-session';
+const supa = { session: (() => { try { return JSON.parse(localStorage.getItem(SKEY)); } catch (e) { return null; } })(), pushing:false, again:false };
+const supaOn = () => !!(SUPA_URL && SUPA_KEY) && !window.claude;
+function saveSession(sn) { supa.session = sn; try { sn ? localStorage.setItem(SKEY, JSON.stringify(sn)) : localStorage.removeItem(SKEY); } catch (e) {} }
+async function supaAuth(path, body) {
+  const res = await fetch(`${SUPA_URL}/auth/v1/${path}`, { method:'POST', headers:{ apikey:SUPA_KEY, 'Content-Type':'application/json' }, body:JSON.stringify(body) });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.msg || j.error_description || j.message || 'Something went wrong');
+  return j;
+}
+function keepSession(j) {
+  if (!j.access_token) return false;
+  saveSession({ access_token:j.access_token, refresh_token:j.refresh_token, expires_at: Date.now() + (j.expires_in || 3600) * 1000, user:{ id:j.user.id, email:j.user.email } });
+  return true;
+}
+async function supaToken() {
+  if (!supa.session) return null;
+  if (Date.now() > supa.session.expires_at - 60000) {
+    try { keepSession(await supaAuth('token?grant_type=refresh_token', { refresh_token: supa.session.refresh_token })); }
+    catch (e) { if (navigator.onLine) { saveSession(null); setSync('Signed out · sign in under 🎨'); } return null; }
+  }
+  return supa.session.access_token;
+}
+async function supaRest(method, query, body, extra) {
+  const tok = await supaToken(); if (!tok) throw new Error('signed out');
+  const res = await fetch(`${SUPA_URL}/rest/v1/timetables${query}`, { method, headers:{ apikey:SUPA_KEY, Authorization:'Bearer ' + tok, 'Content-Type':'application/json', ...(extra || {}) }, body: body ? JSON.stringify(body) : undefined });
+  if (!res.ok) throw new Error('sync ' + res.status);
+  return res.status === 204 || res.status === 201 ? null : res.json();
+}
+async function supaPush() {
+  if (!supa.session) return;
+  if (supa.pushing) { supa.again = true; return; }
+  supa.pushing = true; setSync('Syncing…');
+  try {
+    await supaRest('POST', '', { user_id: supa.session.user.id, data: db, updated: db.updated }, { Prefer:'resolution=merge-duplicates,return=minimal' });
+    setSync('☁︎ Synced');
+  } catch (e) { setSync(navigator.onLine ? '⚠️ Not synced yet' : 'Offline · saved on this device'); }
+  supa.pushing = false;
+  if (supa.again) { supa.again = false; supaPush(); }
+}
+async function supaPull() {
+  if (!supa.session || supa.pushing) return;
+  try {
+    const rows = await supaRest('GET', `?select=data,updated&user_id=eq.${supa.session.user.id}`);
+    const row = rows && rows[0];
+    if (!row) { if (db.updated) supaPush(); else setSync('☁︎ Synced'); return; }
+    if ((row.updated || 0) > db.updated) {
+      db = normalize(row.data); db.updated = row.updated; saveLocal(); lastSaved = JSON.stringify(db);
+      if (sheetMode === 'day') openDay(sheetDay); else if (sheetMode === 'todo') openTodo(); else if (!sheetMode) render(); else renderChips();
+    } else if ((row.updated || 0) < db.updated) { supaPush(); return; }
+    setSync('☁︎ Synced');
+  } catch (e) { setSync(navigator.onLine ? '⚠️ Not synced yet' : 'Offline · saved on this device'); }
+}
+function supaInit() {
+  if (!supaOn()) return;
+  if (!supa.session) { setSync('Sign in to sync →'); document.getElementById('sync').onclick = openAccount; return; }
+  document.getElementById('sync').onclick = openAccount;
+  supaPull();
+  setInterval(supaPull, 20000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) supaPull(); });
+  window.addEventListener('online', supaPull);
+}
+function openAccount() {
+  if (supa.session) {
+    showSheet('Account', `<div class="box">Signed in as <b>${esc(supa.session.user.email)}</b><div class="meta">Your timetable syncs between every device where you sign in with this email.</div></div>
+      <button class="secondary" id="acSync">Sync now</button><button class="danger" id="acOut">Sign out on this device</button>`, null, 'other');
+    document.getElementById('acSync').onclick = async () => { await supaPull(); toast('Synced'); };
+    document.getElementById('acOut').onclick = async () => {
+      try { await fetch(`${SUPA_URL}/auth/v1/logout`, { method:'POST', headers:{ apikey:SUPA_KEY, Authorization:'Bearer ' + supa.session.access_token } }); } catch (e) {}
+      saveSession(null); closeSheet(); setSync('Sign in to sync →'); toast('Signed out. Your data stays on this device.');
+    };
+    return;
+  }
+  showSheet('Sign in to sync', `<div class="meta">Use the same email and password on your iPad and iPhone to see the same timetable on both.</div>
+    <label>Email</label><input type="email" id="acEmail" autocomplete="username" inputmode="email">
+    <label>Password</label><input type="password" id="acPw" autocomplete="current-password" placeholder="At least 6 characters">
+    <div class="box warnbox" id="acMsg" style="display:none"></div>
+    <div style="height:12px"></div>
+    <div class="two"><button class="primary" id="acIn">Sign in</button><button class="secondary" id="acUp" style="margin-top:0">Create account</button></div>`, null, 'other');
+  const msg = t => { const m = document.getElementById('acMsg'); m.style.display = ''; m.textContent = t; };
+  const creds = () => ({ email: document.getElementById('acEmail').value.trim(), password: document.getElementById('acPw').value });
+  const done = () => { closeSheet(); toast('Signed in · syncing'); supaInit(); };
+  document.getElementById('acIn').onclick = async () => {
+    const c = creds(); if (!c.email || !c.password) return msg('Type your email and password.');
+    try { keepSession(await supaAuth('token?grant_type=password', c)); done(); } catch (e) { msg(e.message === 'Invalid login credentials' ? 'Wrong email or password. New here? Tap "Create account".' : e.message); }
+  };
+  document.getElementById('acUp').onclick = async () => {
+    const c = creds(); if (!c.email || c.password.length < 6) return msg('Type your email and a password of at least 6 characters.');
+    try { const j = await supaAuth('signup', c); if (keepSession(j)) done(); else msg('Account created. Check your email for a confirmation link, then come back and tap Sign in.'); }
+    catch (e) { msg(e.message); }
+  };
+}
+
 async function initCloud() {
   if (!(window.claude && typeof window.claude.use === 'function')) return;
   window.claude.use('downloads').then(d => { downloadsCap = d; }).catch(() => {});
@@ -1525,6 +1627,7 @@ document.getElementById('undoBtn').onclick = undo;
 document.getElementById('redoBtn').onclick = redo;
 render();
 initCloud();
+if (!window.claude) supaInit();
 // Offline mode for the installed app (GitHub Pages)
 try { if ('serviceWorker' in navigator && location.protocol === 'https:' && /github\.io$/.test(location.hostname)) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
 let lastDay = todayIso();
