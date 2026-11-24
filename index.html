@@ -66,6 +66,7 @@
     .title { font-size:24px; }
   }
   @media (max-width:440px) { .row2 { gap:2px; } .icon-btn { padding:4px 5px; font-size:19px; } .seg button { padding:5px 9px; } }
+  #sync { cursor:pointer; }
   .info { font-size:12px; color:var(--muted); white-space:nowrap; }
   .info .np { color:var(--prayer); font-weight:600; }
   .chips { display:flex; gap:6px; overflow-x:auto; padding:8px 0 4px; scrollbar-width:none; }
@@ -1502,8 +1503,8 @@ async function pushRemote() {
 }
 /* ================= Account & sync (installed app, outside Claude) ================= */
 // Filled in once the Supabase project exists. Both values are safe to publish.
-const SUPA_URL = '';
-const SUPA_KEY = '';
+const SUPA_URL = 'https://mcsujcizmclspbfixeso.supabase.co';
+const SUPA_KEY = 'sb_publishable_Gv033StVOQ1VAHbf8MKYcw_zL1-k0FI';
 const SKEY = 'timetable-session';
 const supa = { session: (() => { try { return JSON.parse(localStorage.getItem(SKEY)); } catch (e) { return null; } })(), pushing:false, again:false };
 const supaOn = () => !!(SUPA_URL && SUPA_KEY) && !window.claude;
@@ -1562,6 +1563,7 @@ function supaInit() {
   if (!supa.session) { setSync('Sign in to sync →'); document.getElementById('sync').onclick = openAccount; return; }
   document.getElementById('sync').onclick = openAccount;
   supaPull();
+  if (supa.started) return; supa.started = true;
   setInterval(supaPull, 20000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) supaPull(); });
   window.addEventListener('online', supaPull);
