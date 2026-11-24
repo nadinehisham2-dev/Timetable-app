@@ -120,7 +120,11 @@
   .blk.alt { filter:brightness(.82) saturate(1.1); }
   .blk.ov { border:1.5px solid rgba(255,255,255,.85); }
   .pr { position:absolute; left:0; right:0; border-top:1.5px dashed var(--prayer); pointer-events:none; z-index:3; }
-  .pr.hit { right:auto; border-top:2px dashed #fff; filter:drop-shadow(0 0 1px rgba(0,0,0,.6)); z-index:4; }
+  .pr.hit { right:auto; border-top:1px dashed rgba(255,255,255,.7); z-index:4; }
+  .wk-hours { position:relative; }
+  .wk-hours .gpl { position:absolute; left:0; right:2px; height:auto; transform:translateY(-50%); background:var(--bg); color:var(--prayer);
+    font-size:8.5px; line-height:1.1; text-align:right; padding:1px 3px 1px 0; z-index:2; border-right:2px solid var(--prayer); }
+  .wk-hours .gpl b { display:block; font-weight:700; }
   .prl { position:absolute; right:1px; transform:translateY(-110%); font-size:9px; font-weight:600; color:var(--prayer);
     background:var(--bg); padding:0 3px; border-radius:4px; pointer-events:none; z-index:5; white-space:nowrap; }
   .prl.hit { background:#111; color:#fff; }
@@ -515,18 +519,24 @@ function renderWeek(fitH) {
       if (k === 'sunrise') return;
       const py = y(toMin(pt[k])); if (py < 0) return;
       const hit = boxes.filter(b => py >= b.top && py <= b.bot);
-      const onRight = hit.some(b => b.left + b.width > 99);
       c += `<div class="pr" style="top:${py}px"></div>`;
       hit.forEach(b => { c += `<div class="pr hit" style="top:${py}px;left:${b.left}%;width:${b.width}%"></div>`; });
-      c += `<div class="prl${onRight ? ' hit' : ''}" style="top:${py}px"><i>${name} </i>${fmtTime(pt[k])}${db.prayerRemind[k] != null ? ' 🔔' : ''}</div>`;
+
     });
     if (date === today) { const n = new Date(); c += `<div class="now" style="top:${y(n.getHours() * 60 + n.getMinutes())}px"></div>`; }
     all += `<div>${a}</div>`;
     cols += `<div class="wk-col${we}" data-date="${date}" style="height:${(24 - START_H) * H}px">${c}</div>`;
   });
+  const refDate = dates.includes(today) ? today : dates[0], refPt = prayerTimes(refDate);
+  let gutter = '';
+  PRAYERS.forEach(([k, name]) => {
+    if (k === 'sunrise') return;
+    const py = y(toMin(refPt[k])); if (py < 0) return;
+    gutter += `<div class="gpl" style="top:${py}px"><b>${name}${db.prayerRemind[k] != null ? '🔔' : ''}</b>${fmtTime(refPt[k])}</div>`;
+  });
   let hours = ''; for (let h = START_H; h < 24; h++) hours += `<div>${H < 22 && h % 2 ? '' : h === 12 ? '12pm' : h > 12 ? h - 12 + 'pm' : h + 'am'}</div>`;
   main.innerHTML = `<div class="week" style="--h:${H}px"><div class="wk-head">${head}</div><div class="wk-all">${all}</div>
-    <div class="wk-body" id="wkBody"><div class="wk-grid"><div class="wk-hours">${hours}</div>${cols}</div></div></div>`;
+    <div class="wk-body" id="wkBody"><div class="wk-grid"><div class="wk-hours">${hours}${gutter}</div>${cols}</div></div></div>`;
   const body = document.getElementById('wkBody');
   // Upright: shrink the hours so the whole day fits on screen (bigger text setting allows a little scrolling)
   if (!fitH && !isSideways() && body.clientHeight > 100) {
