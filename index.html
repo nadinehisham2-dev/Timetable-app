@@ -68,6 +68,7 @@
     font-variant-numeric:tabular-nums; opacity:.9; }
   .items .tm { font-size:.78em; }
   .done { text-decoration:line-through; opacity:.4; }
+  .blk .done { opacity:.6; text-decoration-thickness:1.5px; }
 
   /* Week */
   .week { flex:1; min-height:0; display:flex; flex-direction:column; }
@@ -469,7 +470,8 @@ function renderWeek() {
       const L = lanes[en.id], top = Math.max(0, y(L.s)), h = Math.max(22, y(L.f) - top - 2);
       const left = L.lane / L.cols * 100, width = 100 / L.cols;
       boxes.push({ top, bot: top + h, left, width });
-      const tasks = en.tasks.filter(Boolean).map(esc).join(', ');
+      const dn = doneSet(en, date);
+      const tasks = en.tasks.map((t, ti) => t ? `<span class="${dn.has(ti) ? 'done' : ''}">${esc(t)}</span>` : '').filter(Boolean).join(', ');
       c += `<div class="blk${L.cols > 1 ? ' ov' : ''}${L.cols > 1 && L.lane % 2 ? ' alt' : ''}" style="top:${top}px;height:${h}px;left:calc(${left}% + 1px);width:calc(${width}% - 2px);background:${esc(p.color)}" data-date="${date}" data-id="${en.id}"><b>${esc(p.name)}</b><span class="tm">${fmtRange(en.start, en.end)}</span>${tasks}</div>`;
     });
     const pt = prayerTimes(date);
