@@ -7,6 +7,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Timetable">
 <title>Timetable</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="theme-color" content="#ffffff">
 <style>
   :root {
     --bg:#fff; --text:#111; --muted:#8e8e93; --line:#e3e3e6; --weekend:#f4f4f5;
@@ -1362,6 +1365,8 @@ async function initCloud() {
 applyTextSize();
 render();
 initCloud();
+// Offline mode when installed from the website (not available inside Claude)
+try { if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude/.test(location.hostname)) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
 let lastDay = todayIso();
 setInterval(() => {
   checkReminders(); updateNextPrayer();
