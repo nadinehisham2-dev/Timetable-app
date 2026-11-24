@@ -202,6 +202,10 @@
   .tb { flex:none; border:none; background:var(--soft); color:var(--text); border-radius:12px; padding:6px 11px; font-size:13px; cursor:pointer; white-space:nowrap; }
   .tb small { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.3px; }
   .tb .np { color:var(--prayer); }
+  .tb.pick { background:var(--text); color:var(--bg); font-weight:600; }
+  .daypick button { display:flex; flex-direction:column; align-items:center; min-width:84px; border-style:solid; color:var(--text); }
+  .daypick button small { color:var(--muted); font-size:11px; }
+  .daypick button.on { border-color:var(--accent); }
   .tb.qa { background:var(--accent); color:#fff; font-weight:600; }
   .res { padding:10px 0; border-bottom:1px solid var(--line); cursor:pointer; }
   .res small { color:var(--muted); display:block; }
@@ -632,15 +636,31 @@ function updateNextPrayer() {   // the "today" bar at the top
   const cur = list.filter(e => toMin(e.start) <= n && n < endMin(e));
   const nxt = list.find(e => toMin(e.start) > n);
   const chip = (e, label, extra) => `<button class="tb" data-today="1"><small>${label}</small> <b style="color:${esc(place(e.placeId).color)}">${esc(place(e.placeId).name)}</b> <span class="tm">${extra}</span></button>`;
-  let html = cur.map(e => chip(e, 'Now', e.end ? 'till ' + fmtTime(e.end) : fmtTime(e.start))).join('');
+  let html = `<button class="tb pick" id="pickDay">📅 Go to a day ▾</button>`;
+  html += cur.map(e => chip(e, 'Now', e.end ? 'till ' + fmtTime(e.end) : fmtTime(e.start))).join('');
   if (nxt) html += chip(nxt, 'Next', `${fmtTime(nxt.start)} · in ${inTime(toMin(nxt.start) - n)}`);
-  if (!cur.length && !nxt) html += `<button class="tb" data-today="1"><small>Today</small> ${list.length ? 'done for the day ✓' : 'nothing timed'}</button>`;
+  if (!cur.length && !nxt) html += `<button class="tb" data-pick="1"><small>Today</small> ${list.length ? 'done for the day ✓' : 'nothing timed'}</button>`;
   const np = nextPrayer();
   if (np) html += `<button class="tb" data-today="1"><small>🕌</small> <b class="np">${np.name}</b> <span class="tm">${fmtTime(np.time)}</span></button>`;
   html += `<button class="tb qa" id="qaBtn">＋ Quick add</button>`;
   const bar = document.getElementById('todayBar'); bar.innerHTML = html;
   bar.querySelectorAll('[data-today]').forEach(b => b.onclick = () => { cursor = parse(t); render(); openDay(t); });
+  bar.querySelectorAll('#pickDay, [data-pick]').forEach(b => b.onclick = openDayPicker);
   document.getElementById('qaBtn').onclick = () => openQuick(sheetDay && sheetMode === 'day' ? sheetDay : t);
+}
+
+/* ================= Go to any day ================= */
+function openDayPicker() {
+  const t = todayIso(), quick = [...Array(14)].map((_, i) => addDays(t, i));
+  const label = (d, i) => i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : shortDate(d);
+  showSheet('Go to a day', `
+    <div class="quick daypick">${quick.map((d, i) => { const n = entriesFor(d, true).length;
+      return `<button data-go="${d}" class="${i === 0 ? 'on' : ''}"><b>${label(d, i)}</b><small>${n ? n + ' item' + (n > 1 ? 's' : '') : 'free'}</small></button>`; }).join('')}</div>
+    <label>Or pick any date</label><input type="date" id="goDate" value="${t}">
+    <div style="height:12px"></div><button class="primary" id="goBtn">Show this day</button>`, null, 'other');
+  const go = d => { if (!d) return; cursor = parse(d); render(); openDay(d); };
+  body.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
+  document.getElementById('goBtn').onclick = () => go(document.getElementById('goDate').value);
 }
 
 /* ================= Quick add ================= */
