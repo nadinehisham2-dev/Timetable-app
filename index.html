@@ -50,8 +50,11 @@
   .btn-link { background:none; border:none; color:var(--accent); font-size:17px; padding:6px 8px; cursor:pointer; }
   .icon-btn { background:none; border:none; color:var(--accent); font-size:20px; padding:4px 8px; cursor:pointer; line-height:1; }
   .spacer { flex:1; }
-  .hist { font-size:22px; padding:4px 7px; }
-  .hist:disabled { opacity:.25; cursor:default; }
+  #today { white-space:nowrap; display:inline-flex; align-items:baseline; gap:4px; padding:6px 4px 6px 6px; }
+  .tdate { font-size:12px; font-weight:600; color:var(--muted); white-space:nowrap; }
+  @media (max-width:440px) { .title { font-size:22px; } #today { font-size:16px; } .hist { padding:4px 3px; } .hist svg { width:20px; height:20px; } }
+  .hist { padding:4px 6px; display:inline-flex; align-items:center; }
+  .hist:disabled { opacity:.35; color:var(--muted); cursor:default; }
   /* Phone turned sideways (short screen): let the whole page scroll, taller day boxes */
   @media (max-height:500px) {
     html, body { height:auto; overflow:visible; }
@@ -276,9 +279,9 @@
   <div class="row1">
     <div class="title"><b id="mName"></b> <span id="yName"></span></div>
     <div style="display:flex;align-items:center;gap:2px">
-      <button class="icon-btn hist" id="undoBtn" aria-label="Undo" title="Undo" disabled>↶</button>
-      <button class="icon-btn hist" id="redoBtn" aria-label="Redo" title="Redo" disabled>↷</button>
-      <button class="btn-link" id="today">Today</button>
+      <button class="icon-btn hist" id="undoBtn" aria-label="Undo" title="Undo" disabled><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+      <button class="icon-btn hist" id="redoBtn" aria-label="Redo" title="Redo" disabled><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+      <button class="btn-link" id="today">Today <span class="tdate" id="tDate"></span></button>
     </div>
   </div>
   <div class="row2">
@@ -289,7 +292,7 @@
     <button class="icon-btn" id="shareBtn" aria-label="Share schedule">📤</button>
     <button class="icon-btn" id="searchBtn" aria-label="Search">🔍</button>
     <button class="icon-btn" id="remBtn" aria-label="Reminders">🔔</button>
-    <button class="icon-btn" id="setBtn" aria-label="Places and settings">🎨</button>
+    <button class="icon-btn" id="setBtn" aria-label="Settings">⚙️</button>
   </div>
   <div class="todaybar" id="todayBar"></div>
   <div class="row2" style="margin-top:2px">
@@ -320,7 +323,7 @@
     <button class="wgo" id="wGo">Create account</button>
     <div class="wnote"><span aria-hidden="true">🔒</span><span>Your email is only used as your sign-in name. <b>The app can't read your emails or access anything in your email account</b>, and only you can see your timetable.</span></div>
     <button class="wskip" id="wSkip">Continue without an account</button>
-    <p class="wskipnote">Your calendar will be saved only on this device. You can sign in later from 🎨.</p>
+    <p class="wskipnote">Your calendar will be saved only on this device.</p>
   </div>
 </div>
 <div class="toast" id="toast"><span id="toastMsg"></span><button id="toastBtn">Undo</button></div>
@@ -329,9 +332,9 @@
 /* ================= Data ================= */
 const KEY = 'timetable-v1', UIKEY = 'timetable-ui';
 const DEFAULT = { places: [
-  { id:'p1', name:'PUA', color:'#6a9a3a', remind:null },
-  { id:'p2', name:'Mounir', color:'#2350c8', remind:null },
-  { id:'p3', name:'Yoga', color:'#b13ee0', remind:null } ], entries: [], updated: 0 };
+  { id:'p1', name:'Clinic', color:'#2a9d8f', remind:null },
+  { id:'p2', name:'Uni', color:'#3b5bdb', remind:null },
+  { id:'p3', name:'Gym', color:'#e8590c', remind:null } ], entries: [], updated: 0 };
 
 function normalize(d) {
   d = d && d.places ? d : JSON.parse(JSON.stringify(DEFAULT));
@@ -665,7 +668,9 @@ function renderWeek(fitH) {
 let resizeT;
 window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (ui.mode === 'week' && !sheetMode) render(); }, 200); });
 
+const SHORT_DAYS = ['Sun', 'Mon', 'Tues', 'Wed', 'Thur', 'Fri', 'Sat'];
 function render() {
+  const td = new Date(); document.getElementById('tDate').textContent = `${SHORT_DAYS[td.getDay()]} ${td.getDate()}`;
   renderChips();
   document.getElementById('vMonth').classList.toggle('on', ui.mode === 'month');
   document.getElementById('vWeek').classList.toggle('on', ui.mode === 'week');
@@ -804,9 +809,9 @@ function parseQuick(text, base) {
 }
 function openQuick(base) {
   showSheet('Quick add', `
-    <input type="text" id="qaText" placeholder="e.g. PUA tomorrow 8:30-2 pt diagnosis, scaling" autocomplete="off" enterkeyhint="done">
+    <input type="text" id="qaText" placeholder="e.g. Clinic tomorrow 9-2 check-ups, reports" autocomplete="off" enterkeyhint="done">
     <div class="meta" style="margin-top:6px">Write place, day, time and tasks in any order. Separate tasks with commas.<br>
-      Examples: <i>Mounir sat 2-7pm pt nermin cbct</i> · <i>Yoga every tue 9pm</i> · <i>Clinic every other sun 10am</i> · <i>PUA 1st & 3rd sun 9-2</i> · <i>Clinic 12/12 10am remind 1h</i></div>
+      Examples: <i>Clinic sat 2-7pm check-ups</i> · <i>Gym every tue 9pm</i> · <i>Uni every other sun 10am</i> · <i>Clinic 1st & 3rd sun 9-2</i> · <i>Uni 12/12 10am remind 1h</i></div>
     <div class="box" id="qaPrev" style="display:none"></div>
     <div style="height:12px"></div>
     <div class="two"><button class="secondary" id="qaEdit" style="margin-top:0" disabled>Edit details</button><button class="primary" id="qaAdd" disabled>Add</button></div>`,
@@ -895,7 +900,7 @@ function openDay(date) {
     </div>`;
   });
   if (date === todayIso()) { const n = unfinished().length; if (n) html += `<button class="secondary" id="openTodo" style="margin:0 0 10px">↺ ${n} unfinished task${n > 1 ? 's' : ''} from earlier days</button>`; }
-  html += `<div class="two"><button class="primary" id="addEntry">+ Add</button><button class="secondary" id="dayQuick" style="margin-top:0">⚡ Quick add</button></div>
+  html += `<button class="primary" id="addEntry">+ Add</button>
     <div class="two"><button class="secondary" id="tplApply">📋 Use a template</button><button class="secondary" id="tplSave" ${list.length ? '' : 'disabled style="opacity:.4"'}>Save day as template</button></div>`;
   const missing = db.entries.filter(e => e.repeat && !occurs(e, date));
   if (missing.length) html += `<div class="lbl">Add a repeating item to this day only</div><div class="quick">` +
@@ -918,7 +923,6 @@ function openDay(date) {
     }, () => openDay(date));
   });
   document.getElementById('addEntry').onclick = () => openEditor(date);
-  document.getElementById('dayQuick').onclick = () => openQuick(date);
   document.getElementById('tplApply').onclick = () => openTemplates(date);
   if (list.length) document.getElementById('tplSave').onclick = () => saveTemplate(date);
   const ot = document.getElementById('openTodo'); if (ot) ot.onclick = openTodo;
@@ -975,7 +979,7 @@ function openEditor(date, id) {
   const tasksEl = document.getElementById('fTasks');
   const addTask = (v = '', tm = '') => {
     const row = document.createElement('div'); row.className = 'task-row';
-    row.innerHTML = `<input type="text" class="tx" placeholder="e.g. pt diagnosis"><input type="time" class="tt" aria-label="Task time (optional)"><button aria-label="Remove">−</button>`;
+    row.innerHTML = `<input type="text" class="tx" placeholder="e.g. Lecture notes"><input type="time" class="tt" aria-label="Task time (optional)"><button aria-label="Remove">−</button>`;
     row.querySelector('.tx').value = v; row.querySelector('.tt').value = tm; row.querySelector('button').onclick = () => row.remove();
     tasksEl.appendChild(row); return row;
   };
@@ -1481,7 +1485,7 @@ function checkReminders() {
 /* ================= Places & settings ================= */
 function openSettings() {
   const rows = db.places.map(p => `<div class="place-row" data-id="${esc(p.id)}"><input type="color" value="${esc(p.color)}"><input type="text"><button aria-label="Delete">−</button></div>`).join('');
-  showSheet('Places & colors', `
+  showSheet('Settings', `
     <div id="pl">${rows}</div>
     <button class="add-small" id="plAdd" style="margin-top:8px">+ Add place</button>
     <div style="height:12px"></div><button class="primary" id="plSave">Save</button>
@@ -1644,7 +1648,7 @@ async function supaToken() {
   if (!supa.session) return null;
   if (Date.now() > supa.session.expires_at - 60000) {
     try { keepSession(await supaAuth('token?grant_type=refresh_token', { refresh_token: supa.session.refresh_token })); }
-    catch (e) { if (navigator.onLine) { saveSession(null); setSync('Signed out · sign in under 🎨'); } return null; }
+    catch (e) { if (navigator.onLine) { saveSession(null); setSync('Signed out · tap Sign in to sync'); } return null; }
   }
   return supa.session.access_token;
 }
@@ -1710,7 +1714,6 @@ function showWelcome() {
         const j = await supaAuth('signup', { email, password });
         if (!keepSession(j)) { go.disabled = false; setMode('in'); return msg('Account created. Check your email for a confirmation link, then sign in here.'); }
       } else keepSession(await supaAuth('token?grant_type=password', { email, password }));
-      try { localStorage.setItem('tt-welcome', 'done'); } catch (e) {}
       close(); toast(mode === 'up' ? 'Welcome! Your calendar now syncs ☁︎' : 'Signed in · syncing ☁︎'); supaInit();
     } catch (e) {
       go.disabled = false; go.textContent = mode === 'up' ? 'Create account' : 'Sign in';
@@ -1721,7 +1724,7 @@ function showWelcome() {
     }
   };
   [document.getElementById('wEmail'), pw].forEach(i => i.addEventListener('keydown', ev => { if (ev.key === 'Enter') go.click(); }));
-  document.getElementById('wSkip').onclick = () => { try { localStorage.setItem('tt-welcome', 'skip'); } catch (e) {} close(); };
+  document.getElementById('wSkip').onclick = () => { try { sessionStorage.setItem('tt-welcome-skip', '1'); } catch (e) {} close(); };
   w.classList.add('show'); requestAnimationFrame(() => requestAnimationFrame(() => w.classList.add('in')));
 }
 
@@ -1788,8 +1791,9 @@ render();
 initCloud();
 if (!window.claude) {
   supaInit();
-  let seen = null; try { seen = localStorage.getItem('tt-welcome'); } catch (e) {}
-  if (supaOn() && !supa.session && !seen) showWelcome();
+  // Not signed in: show the welcome page each time the app is opened again (skipping only lasts while it stays open)
+  let skipped = null; try { skipped = sessionStorage.getItem('tt-welcome-skip'); } catch (e) {}
+  if (supaOn() && !supa.session && !skipped) showWelcome();
 }
 // Offline mode for the installed app (GitHub Pages)
 try { if ('serviceWorker' in navigator && location.protocol === 'https:' && /github\.io$/.test(location.hostname)) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
