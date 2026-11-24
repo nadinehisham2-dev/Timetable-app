@@ -1557,7 +1557,7 @@ async function testPush() {
   msg('Sending a test…');
   try {
     const tok = await supaToken();
-    const res = await fetch(`${SUPA_URL}/functions/v1/reminders`, { method:'POST', headers:{ apikey:SUPA_KEY, Authorization:'Bearer ' + tok, 'Content-Type':'application/json' }, body:'{"test":true}' });
+    const res = await fetch(`${SUPA_URL}/functions/v1/Reminders`, { method:'POST', headers:{ apikey:SUPA_KEY, Authorization:'Bearer ' + tok, 'Content-Type':'application/json' }, body:'{"test":true}' });
     const j = await res.json().catch(() => ({}));
     if (res.status === 404) return msg('⚠️ The reminder sender isn\'t set up in Supabase yet (step 2).');
     if (!res.ok) return msg('⚠️ ' + (j.error || j.message || 'Test failed (' + res.status + ')'));
