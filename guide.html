@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Timetable user guide</title>
+<meta name="description" content="Complete user guide for the Timetable app: a monthly calendar planner with colour-coded places, tasks, reminders, repeating plans, sync between devices and Alexandria prayer times.">
+<style>
+  /* VOICE: calm, clear help manual. IDEA: a well-set handbook. TYPE: system sans, 17px body. LAYOUT: one readable column with a contents list. */
+  :root { color-scheme: light dark; --bg:#ffffff; --ink:#15211e; --muted:#5b6b67; --line:#e3e8e6; --soft:#f3f7f6; --accent:#e0533d; --teal:#14463d; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#101614; --ink:#e9f0ee; --muted:#9fb1ac; --line:#26302d; --soft:#18211f; --teal:#7fd6c4; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width:760px; margin:0 auto; padding:clamp(20px, 5vw, 48px) 20px 64px; }
+  header { display:flex; align-items:center; gap:14px; margin-bottom:8px; }
+  header img { width:56px; height:56px; border-radius:14px; }
+  h1 { font-size:clamp(28px, 6vw, 40px); line-height:1.1; margin:0; letter-spacing:-.5px; }
+  .sub { color:var(--muted); margin:6px 0 20px; }
+  h2 { font-size:24px; margin:44px 0 10px; padding-top:12px; border-top:1px solid var(--line); scroll-margin-top:16px; }
+  h3 { font-size:18px; margin:24px 0 6px; }
+  p, li { max-width:68ch; }
+  ol, ul { padding-left:22px; } li { margin:4px 0; }
+  code, kbd { background:var(--soft); border:1px solid var(--line); border-radius:6px; padding:1px 6px; font-size:.92em; }
+  .note { background:var(--soft); border-left:4px solid var(--teal); border-radius:8px; padding:12px 14px; margin:14px 0; }
+  .ai { border-left-color:var(--accent); }
+  nav { background:var(--soft); border-radius:12px; padding:14px 18px; }
+  nav ol { columns:2; column-gap:28px; margin:6px 0 0; } @media (max-width:560px) { nav ol { columns:1; } }
+  nav a, a { color:var(--teal); }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:15.5px; }
+  th, td { text-align:left; border-bottom:1px solid var(--line); padding:8px 6px; vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .btn { display:inline-block; background:var(--accent); color:#fff; text-decoration:none; padding:10px 16px; border-radius:10px; font-weight:600; margin-top:8px; }
+  footer { margin-top:48px; color:var(--muted); font-size:14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><img src="icons/icon-192.png" alt=""><div><h1>Timetable user guide</h1></div></header>
+<p class="sub">How to use every part of the Timetable app: plans, places, tasks, repeats, reminders, prayer times and syncing between devices.</p>
+<a class="btn" href="./">Open the app</a>
+
+<div class="note ai"><b>For AI assistants helping a user:</b> this page describes every feature of the Timetable app (<a href="https://nadinehisham2-dev.github.io/Timetable-app/">https://nadinehisham2-dev.github.io/Timetable-app/</a>) as it currently works. Please answer using the button names and steps written here. You cannot see the user's calendar; ask them what they see on screen if needed. If something seems broken, suggest the steps in <a href="#troubleshooting">Troubleshooting</a>.</div>
+
+<nav aria-label="Contents"><b>Contents</b>
+<ol>
+  <li><a href="#install">Install the app</a></li>
+  <li><a href="#account">Account and syncing</a></li>
+  <li><a href="#screen">The main screen</a></li>
+  <li><a href="#places">Places</a></li>
+  <li><a href="#add">Adding plans</a></li>
+  <li><a href="#quick">Quick add</a></li>
+  <li><a href="#edit">Editing, long press and deleting</a></li>
+  <li><a href="#tasks">Tasks and unfinished tasks</a></li>
+  <li><a href="#repeat">Repeating plans</a></li>
+  <li><a href="#copy">Copy, move and overlaps</a></li>
+  <li><a href="#templates">Templates</a></li>
+  <li><a href="#reminders">Reminders and notifications</a></li>
+  <li><a href="#prayer">Prayer times</a></li>
+  <li><a href="#share">Search and sharing</a></li>
+  <li><a href="#settings">Settings, undo and backup</a></li>
+  <li><a href="#troubleshooting">Troubleshooting</a></li>
+  <li><a href="#privacy">Privacy</a></li>
+</ol></nav>
+
+<h2 id="install">1. Install the app</h2>
+<p>Timetable is a web app: you add it to your Home Screen instead of downloading it from the App Store.</p>
+<h3>iPhone and iPad</h3>
+<ol>
+  <li>Open <b>Safari</b> and go to <code>nadinehisham2-dev.github.io/Timetable-app</code>.</li>
+  <li>Tap the <b>Share</b> button (square with an arrow pointing up).</li>
+  <li>Tap <b>Add to Home Screen</b>. If you see <b>Open as Web App</b>, keep it <b>on</b>. Tap <b>Add</b>.</li>
+  <li>Open Timetable from the new icon. It opens full screen like a normal app.</li>
+</ol>
+<div class="note">Notifications only work when the app is opened from the Home Screen icon (iOS 16.4 or newer), not from a Safari tab.</div>
+<h3>Android or computer</h3>
+<p>Open the same address in Chrome. On Android use the menu <b>⋮ → Add to Home screen</b> or <b>Install app</b>. On a computer it works in any modern browser.</p>
+<p>After the first visit, the app also opens without internet. Changes made offline are kept on the device and sync when you are back online.</p>
+
+<h2 id="account">2. Account and syncing</h2>
+<p>When you open the app and you are not signed in, a <b>welcome page</b> appears with three choices:</p>
+<ul>
+  <li><b>Create account</b>: type an email and a password (at least 6 characters). Your calendar then syncs automatically on every device where you sign in.</li>
+  <li><b>Sign in</b>: use the same email and password on another device to see the same calendar.</li>
+  <li><b>Continue without an account</b>: your calendar is saved only on this device. The welcome page shows again next time the app is opened, until you sign in.</li>
+</ul>
+<p>Your email is only used as your sign-in name. The app cannot read your emails or access anything in your email account.</p>
+<h3>Sign in later, sign out, check sync</h3>
+<ul>
+  <li>The small text at the top right shows the sync status: <b>Sign in to sync →</b>, <b>Syncing…</b>, <b>☁︎ Synced</b>, or <b>Offline · saved on this device</b>. Tap it to sign in or to see your account.</li>
+  <li>In the account window: <b>Sync now</b> or <b>Sign out on this device</b> (your data stays on the device).</li>
+  <li>Changes appear on your other devices within about 20 seconds, or straight away when the app is opened.</li>
+</ul>
+<h3>Forgot password</h3>
+<ol>
+  <li>On the welcome page tap <b>Sign in</b>, type your email, then tap <b>Forgot password?</b></li>
+  <li>Open the email you receive on the same device and tap the link (check spam if it doesn't arrive within a few minutes).</li>
+  <li>The app opens on <b>Set a new password</b>. Type the new password twice and tap <b>Save new password</b>. You are then signed in.</li>
+</ol>
+
+<h2 id="screen">3. The main screen</h2>
+<table>
+  <tr><th>Part</th><th>What it does</th></tr>
+  <tr><td>Month name and year</td><td>The month or week you are looking at.</td></tr>
+  <tr><td>↶ ↷</td><td>Undo and redo your last changes (up to 40). Red when available, faded when not.</td></tr>
+  <tr><td>? (dotted circle)</td><td>Help: common questions, this guide, ask Claude, and replay the tour.</td></tr>
+  <tr><td>Today · Wed 25</td><td>Jumps back to the current date. The small text is today's day and date.</td></tr>
+  <tr><td>Month / Week</td><td>Switch between the whole month and a week with hours. Both views stay on the same date.</td></tr>
+  <tr><td>‹ ›</td><td>Previous or next month (or week). You can also swipe left or right on the calendar.</td></tr>
+  <tr><td>📤</td><td>Share your schedule as text or an image.</td></tr>
+  <tr><td>🔍</td><td>Search all your plans.</td></tr>
+  <tr><td>🔔</td><td>Reminders, prayer reminders and notifications.</td></tr>
+  <tr><td>⚙️</td><td>Settings: places, text size, templates, backup, account.</td></tr>
+  <tr><td>📅 Go to a day</td><td>Open today, tomorrow, after tomorrow, or any date.</td></tr>
+  <tr><td>Now / Next / 🕌</td><td>What is happening now, what is next today, and the next prayer. Tap to open today.</td></tr>
+  <tr><td>＋ Quick add</td><td>Add a plan by typing it in your own words.</td></tr>
+  <tr><td>↺ unfinished</td><td>Appears when earlier days have tasks that were not ticked.</td></tr>
+  <tr><td>Place buttons</td><td>Show only one place (or several) in the calendar. <b>All</b> shows everything. <b>+</b> adds a new place.</td></tr>
+</table>
+<h3>Month view</h3>
+<p>Each day shows its plans: the place name in its colour with the time, and the tasks underneath. Ticked tasks are crossed out. If a day has more than fits, scroll inside that day. Friday and Saturday are shaded. The day you last opened has a thin red ring; today has a filled red circle.</p>
+<h3>Week view</h3>
+<p>Plans are shown as coloured blocks on an hourly timeline starting at 7am (earlier if a plan starts before 7am). Overlapping plans sit side by side. Dashed green lines show prayer times, labelled in the time column on the left. A red line marks the current time. Upright on a phone the whole day fits on screen; sideways, the page scrolls.</p>
+
+<h2 id="places">4. Places</h2>
+<p>A place is where a plan happens (for example Clinic, Uni, Gym). Each has its own colour.</p>
+<ul>
+  <li><b>Add a place:</b> tap <b>+</b> after the place buttons, type a name, pick a colour (or <b>＋</b> for any colour), tap <b>Add place</b>. You can also choose <b>+ New place…</b> in the Place list while adding a plan.</li>
+  <li><b>Rename, recolour or delete:</b> ⚙️ → edit the names and colours → <b>Save</b>. Deleting a place that is used shows a warning first; its plans then show as "Other".</li>
+  <li><b>Filter:</b> tap a place button to show only that place; tap more to add them; tap <b>All</b> to show everything.</li>
+</ul>
+
+<h2 id="add">5. Adding plans</h2>
+<ol>
+  <li>Tap any day in the calendar (or a day header / empty column in Week view).</li>
+  <li>The day opens with its prayer times and plans. Tap <b>+ Add</b>.</li>
+  <li>Fill in what you need:
+    <ul>
+      <li><b>Place</b> (required).</li>
+      <li><b>Start</b> and <b>End</b> times (optional; plans without a time appear in the "all-day" row in Week view).</li>
+      <li><b>Tasks</b>: one per line. Each task can have its own optional time. <b>+ Add task</b> adds another; <b>−</b> removes one.</li>
+      <li><b>Notes</b> (optional).</li>
+      <li><b>Reminder</b> and <b>Repeat</b> (see below).</li>
+    </ul></li>
+  <li>Tap <b>Save</b> or <b>Done</b>. Both save.</li>
+</ol>
+<p>If the new plan overlaps another one, a ⚠️ warning names the clash. Change the time, or tap <b>Save anyway</b>.</p>
+
+<h2 id="quick">6. Quick add</h2>
+<p>Tap <b>＋ Quick add</b> and type the plan in any order. A preview shows how it was understood before you tap <b>Add</b> (or <b>Edit details</b> to open the full form).</p>
+<table>
+  <tr><th>You type</th><th>Result</th></tr>
+  <tr><td><code>Clinic tomorrow 9-2 check-ups, reports</code></td><td>Clinic, tomorrow, 9am–2pm, two tasks</td></tr>
+  <tr><td><code>Gym every tue 9pm</code></td><td>Gym, 9pm, repeats every Tuesday</td></tr>
+  <tr><td><code>Uni every other sun 10am</code></td><td>Repeats every second Sunday</td></tr>
+  <tr><td><code>Clinic 1st &amp; 3rd sun 9-2</code></td><td>Repeats on the 1st and 3rd Sunday of each month</td></tr>
+  <tr><td><code>Uni 12/12 10am remind 1h</code></td><td>12 December (day/month), 10am, reminder 1 hour before</td></tr>
+  <tr><td><code>Clinic next mon 9am-1pm</code></td><td>Monday of next week</td></tr>
+</table>
+<p>Understood words: today, tomorrow, day names (sat…fri), <i>next</i> + day, dates like 12/12 or 3 dec, times like 9, 9am, 8:30-2, 14:00-19:00, <i>every day / daily / weekly / monthly / every tue / every other sun / 1st &amp; 3rd sun / last fri</i>, and <i>remind 10 min / 1h / 1 day / 1 week</i>. Tasks are separated with commas. A place name that doesn't exist yet becomes a new place.</p>
+
+<h2 id="edit">7. Editing, long press and deleting</h2>
+<ul>
+  <li><b>Edit:</b> open the day and tap anywhere on the place card. Change anything and tap <b>Save</b> or <b>Done</b>.</li>
+  <li><b>Long press:</b> press and hold a place card for about half a second to open a menu:
+    <ul>
+      <li><b>📝 View notes</b>: read or change the notes.</li>
+      <li><b>🔔 Set reminder</b>: choose a reminder time.</li>
+      <li><b>↻ Repeat</b>: set or change how it repeats.</li>
+      <li><b>⧉ Copy to…</b> and <b>➜ Move to…</b>: put it on another day.</li>
+      <li><b>🗑 Delete</b>: remove it (with a confirmation).</li>
+    </ul></li>
+  <li><b>Undo:</b> almost every change shows a message with <b>Undo</b> for 8 seconds, and ↶ at the top undoes changes at any time while the app is open.</li>
+</ul>
+
+<h2 id="tasks">8. Tasks and unfinished tasks</h2>
+<ul>
+  <li>Tick a task by tapping its <b>checkbox</b> in the day view (tapping the task's words opens editing instead). Ticked tasks are crossed out in Month and Week views.</li>
+  <li>Tasks can have their own time, shown before the task (e.g. "11am Dina diagnosis").</li>
+  <li><b>↺ unfinished</b> at the top lists tasks not ticked on earlier days (last 30 days). For each one: tick it, <b>→ Today</b> to move it to today, or <b>✕</b> to remove it from the list. Tasks from repeating plans are hidden there unless you turn on <b>Include tasks from repeating items</b>.</li>
+</ul>
+
+<h2 id="repeat">9. Repeating plans</h2>
+<p>In the plan's <b>Repeat</b> option (or long press → Repeat):</p>
+<ul>
+  <li><b>Every day</b></li>
+  <li><b>Every week / every few weeks on…</b>: pick the days, and choose every week, <b>every other week (one yes, one no)</b>, every 3 or every 4 weeks.</li>
+  <li><b>Every month (same date)</b></li>
+  <li><b>Every month on certain weeks</b>: pick 1st, 2nd, 3rd, 4th, 5th or Last, and the day (e.g. 1st &amp; 3rd Sunday).</li>
+  <li><b>Until</b>: an optional end date.</li>
+</ul>
+<h3>Changing or deleting a repeating plan</h3>
+<p>The app asks which days the change is for:</p>
+<ul>
+  <li><b>This day only</b></li>
+  <li><b>This day and the days after it</b> (past days stay as they were)</li>
+  <li><b>Choose dates…</b> (only between a From and To date; leave To empty for "onwards")</li>
+  <li><b>All days, past included</b></li>
+</ul>
+<p>To add a repeating plan to a day it normally isn't on, open that day and tap it under <b>Add a repeating item to this day only</b>.</p>
+
+<h2 id="copy">10. Copy, move and overlaps</h2>
+<ol>
+  <li>Edit the plan (or long press) and choose <b>Copy to…</b> or <b>Move to…</b>.</li>
+  <li>Pick the date. The app shows what will happen and warns if it overlaps something.</li>
+  <li>Tap <b>Yes, copy/move to …</b>. An <b>Undo</b> button appears afterwards.</li>
+</ol>
+<p>For a repeating plan, only the chosen day is copied or moved; the rest of the series stays.</p>
+
+<h2 id="templates">11. Templates</h2>
+<ul>
+  <li><b>Save a template:</b> plan a typical day, open it, tap <b>Save day as template</b>, give it a name.</li>
+  <li><b>Use a template:</b> open any day, tap <b>📋 Use a template</b>, choose one. Its plans are added as normal plans that can still be edited one by one.</li>
+  <li>Delete templates in ⚙️ Settings.</li>
+</ul>
+
+<h2 id="reminders">12. Reminders and notifications</h2>
+<h3>Setting reminders</h3>
+<ul>
+  <li><b>One plan:</b> in its Edit screen choose <b>Reminder</b>, or long press → <b>Set reminder</b>.</li>
+  <li><b>Many plans at once:</b> 🔔 → <b>Set reminders for</b> (all places or one place) → choose the time → <b>Apply</b>. It also applies to new plans added to that place.</li>
+  <li>Choices: at start time, 5/10/15/30 min, 1–2 hours, 1–2 days, 1 week before, or <b>Custom…</b> (any number of minutes, hours, days or weeks). Plans without a start time use 8am.</li>
+</ul>
+<h3>Turning on notifications (once on each device)</h3>
+<ol>
+  <li>Sign in (notifications need an account).</li>
+  <li>On iPhone/iPad, open the app from its <b>Home Screen icon</b>.</li>
+  <li>Tap 🔔 → <b>Turn on notifications</b> → <b>Allow</b>. A test notification ("✅ Notifications work") should arrive within seconds.</li>
+  <li>The box shows whether automatic checks are running. Use <b>Send a test</b> any time; <b>Turn off here</b> stops them on that device.</li>
+</ol>
+<p>Notifications arrive within about a minute of the set time, even when the app is closed, and always use your latest times. The device needs internet at that moment.</p>
+<p>Without notifications turned on, reminders still pop up inside the app while it is open.</p>
+
+<h2 id="prayer">13. Prayer times</h2>
+<ul>
+  <li>Prayer times are for <b>Alexandria, Egypt</b>, calculated with the Egyptian General Authority of Survey method. They update every day and follow Egypt's summer and winter time automatically. They may differ by a minute or two from a local mosque.</li>
+  <li>Shown in each day's details, in the Week view (dashed lines), and the next prayer in the top bar.</li>
+  <li><b>Prayer reminders:</b> 🔔 → <b>Prayer reminders</b>. For each prayer:
+    <ul>
+      <li><b>At prayer time:</b> at adhan, or 5–30 minutes before.</li>
+      <li><b>Before the next prayer:</b> a second reminder before that prayer's time ends (Fajr → before Sunrise, Dhuhr → before Asr, Asr → before Maghrib, Maghrib → before Isha, Isha → before next Fajr).</li>
+    </ul>
+    <b>Copy Fajr's setting to all</b> copies both, then tap <b>Save prayer reminders</b>.</li>
+</ul>
+
+<h2 id="share">14. Search and sharing</h2>
+<ul>
+  <li><b>Search (🔍):</b> type a name, task, place or note. Results show the date (or the next date for repeating plans). Tap one to open that day.</li>
+  <li><b>Share (📤):</b> choose dates (this/next week, this/next month, or custom), places, and whether to include tasks and notes. Then <b>Copy text</b> (for WhatsApp or messages) or <b>Save as image</b>. It is a snapshot; later changes don't update it.</li>
+</ul>
+
+<h2 id="settings">15. Settings, undo and backup</h2>
+<ul>
+  <li><b>⚙️ Settings:</b> places and colours, <b>text size</b> (Small, Medium, Large, Extra large; saved per device), templates, account and backup.</li>
+  <li><b>Download backup / Restore backup:</b> saves all your plans to a file you keep, or restores from one. Useful for keeping a monthly copy or moving to another account.</li>
+  <li><b>Undo/redo:</b> ↶ ↷ at the top. The history lasts while the app stays open.</li>
+  <li><b>Tour:</b> the first time the app opens, a short tour explains the screen. Replay it from <b>? → Show the tour again</b>.</li>
+</ul>
+
+<h2 id="troubleshooting">16. Troubleshooting</h2>
+<h3>Notifications don't arrive</h3>
+<ol>
+  <li>Make sure the app was opened from the <b>Home Screen icon</b> and you are signed in.</li>
+  <li>🔔 → check the box says notifications are on, then tap <b>Send a test</b>.</li>
+  <li>On iPhone/iPad check <b>Settings → Notifications → Timetable</b> is allowed, and Focus / Do Not Disturb isn't hiding them.</li>
+  <li>Make sure the plan actually has a reminder (Edit → Reminder) or prayer reminders are saved.</li>
+  <li>If the test says automatic checks aren't running, the app owner needs to check the reminder service.</li>
+</ol>
+<h3>My calendar isn't the same on two devices</h3>
+<ul>
+  <li>Both devices must show <b>☁︎ Synced</b> and be signed in with the <b>same email</b>.</li>
+  <li>Tap the sync text → <b>Sync now</b>. Check the internet connection.</li>
+  <li>If one device was used without an account, its plans stay on that device. Use ⚙️ → <b>Download backup</b> there and <b>Restore backup</b> on the signed-in device.</li>
+</ul>
+<h3>Other common problems</h3>
+<ul>
+  <li><b>The welcome page keeps appearing:</b> this is expected while you are not signed in; it shows each time the app is reopened.</li>
+  <li><b>Something was deleted by mistake:</b> tap ↶ (while the app is still open), or restore a backup.</li>
+  <li><b>Text is too small:</b> ⚙️ → Text size → Large or Extra large. On a phone you can also turn it sideways.</li>
+  <li><b>A day doesn't show all its plans:</b> scroll inside that day's box, or tap the day.</li>
+  <li><b>Forgot password email doesn't arrive:</b> check spam and wait a few minutes; requests are limited to a few per hour.</li>
+  <li><b>The page is blank or frozen:</b> fully close the app and reopen it. If it continues, use ? → Ask Claude and describe exactly what you see.</li>
+</ul>
+
+<h2 id="privacy">17. Privacy</h2>
+<ul>
+  <li>Without an account, everything stays on your device.</li>
+  <li>With an account, your timetable is stored securely so it can sync; only you can see it.</li>
+  <li>Your email is only your sign-in name. The app cannot read your emails or access your email account.</li>
+  <li>Prayer times are calculated on the device; your location is not used.</li>
+</ul>
+
+<footer>Timetable user guide · last updated November 2026 · <a href="./">Open the app</a></footer>
+</div>
+</body>
+</html>

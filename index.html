@@ -293,6 +293,7 @@
   .wforgot { background:none; border:none; color:#14463d; font-size:14px; font-weight:600; padding:8px 0 0; cursor:pointer; }
   .wmsg.ok { background:#e3f4ee; color:#14463d; }
   @media (prefers-color-scheme: dark) { .wforgot { color:#7fd6c4; } .wmsg.ok { background:rgba(127,214,196,.15); color:#bfeee3; } }
+  .hlink { display:flex; align-items:center; justify-content:center; text-decoration:none; box-sizing:border-box; }
   .faq details { border-bottom:1px solid var(--line); padding:10px 0; }
   .faq summary { font-weight:600; cursor:pointer; font-size:15px; }
   .faq p { margin:8px 0 2px; font-size:14px; line-height:1.5; color:var(--muted); }
@@ -2031,6 +2032,7 @@ async function handleRecovery() {
 
 /* ================= Help ================= */
 const APP_LINK = 'https://nadinehisham2-dev.github.io/Timetable-app/';
+const GUIDE_LINK = APP_LINK + 'guide.html';
 function openHelp() {
   const faq = [
     ['How do I add something?', 'Tap any day in the calendar, then <b>+ Add</b>. Or use <b>＋ Quick add</b> at the top and type e.g. "Clinic tomorrow 9-2 check-ups".'],
@@ -2041,7 +2043,7 @@ function openHelp() {
     ['How do I add or change places?', 'Tap <b>+</b> after the place buttons to add one. Rename, recolour or delete them in ⚙️ Settings.'],
   ];
   showSheet('Help', `
-    <button class="secondary" id="hTour" style="margin-top:0">▶ Show the tour again</button>
+    <div class="two"><a class="secondary hlink" href="${GUIDE_LINK}" target="_blank" rel="noopener" style="margin-top:0">📖 User guide</a><button class="secondary" id="hTour" style="margin-top:0">▶ Show the tour</button></div>
     <div class="lbl">Common questions</div>
     <div class="faq">${faq.map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('')}</div>
     <div class="lbl" style="margin-top:20px">Ask Claude</div>
@@ -2054,7 +2056,7 @@ function openHelp() {
     const q = document.getElementById('hQ').value.trim();
     if (!q) return toast('Write your question first');
     const ua = /iPad|Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1 ? 'iPad' : /iPhone/.test(navigator.userAgent) ? 'iPhone' : /Android/.test(navigator.userAgent) ? 'Android' : 'computer';
-    const prompt = `I'm using the Timetable app (a monthly calendar planner with places, tasks, reminders and Alexandria prayer times: ${APP_LINK}) on my ${ua}${isStandalone() ? ', opened from the Home Screen' : ''}. ${supaOn() ? (supa.session ? 'I am signed in.' : 'I am not signed in.') : ''}\n\nMy question / problem:\n${q}`;
+    const prompt = `I'm using the Timetable app (a monthly calendar planner with places, tasks, reminders and Alexandria prayer times: ${APP_LINK}) on my ${ua}${isStandalone() ? ', opened from the Home Screen' : ''}. ${supaOn() ? (supa.session ? 'I am signed in.' : 'I am not signed in.') : ''}\n\nThe full user guide for the app is here, please read it to answer: ${GUIDE_LINK}\n\nMy question / problem:\n${q}`;
     try { await navigator.clipboard.writeText(prompt); } catch (e) {}
     const a = document.createElement('a'); a.href = 'https://claude.ai/new?q=' + encodeURIComponent(prompt); a.target = '_blank'; a.rel = 'noopener';
     document.body.appendChild(a); a.click(); a.remove();

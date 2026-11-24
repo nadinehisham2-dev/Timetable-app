@@ -1,6 +1,6 @@
 // Offline support: keep the app's files on the device and refresh them in the background.
-const CACHE = 'timetable-v4';
-const FILES = ['./', './index.html', './manifest.json', './img/welcome.webp', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE = 'timetable-v5';
+const FILES = ['./', './index.html', './manifest.json', './img/welcome.webp', './guide.html', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).catch(() => {})); self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
