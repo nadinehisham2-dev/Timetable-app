@@ -139,7 +139,7 @@
   .blk > b { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:calc(9.5px * var(--ts,1)); }
   @media (min-width:700px) { .blk .bt { font-size:calc(10px * var(--ts,1)); } .blk .tm { font-size:calc(10px * var(--ts,1)); } .blk > b { font-size:calc(11px * var(--ts,1)); } }
   .blk .bt { display:block; font-size:calc(8px * var(--ts,1)); font-weight:500; line-height:1.15; letter-spacing:-.1px; margin-top:2px; padding-top:2px;
-    border-top:1px solid rgba(255,255,255,.35); overflow-wrap:break-word; }
+    border-top:1px solid rgba(128,128,128,.45); overflow-wrap:break-word; }
   .blk { box-shadow:0 0 0 1px var(--bg); }
   .blk.alt { filter:brightness(.82) saturate(1.1); }
   .blk.ov { border:1.5px solid rgba(255,255,255,.85); }
@@ -234,7 +234,7 @@
   .todo { display:flex; align-items:center; gap:4px; border-bottom:1px solid var(--line); }
   .mini { border:none; background:var(--soft); color:var(--accent); border-radius:8px; padding:6px 8px; font-size:13px; cursor:pointer; white-space:nowrap; }
   .mini.x { color:var(--muted); background:none; font-size:16px; }
-  #sPlaces button.on { background:var(--c); color:#fff; border-style:solid; border-color:var(--c); }
+  #sPlaces button.on { background:var(--c); color:var(--ci,#fff); border-style:solid; border-color:var(--c); }
   .preview { background:var(--soft); border-radius:12px; padding:12px; font:13px/1.45 -apple-system, system-ui, sans-serif; white-space:pre-wrap; max-height:220px; overflow:auto; margin:0 0 10px; }
   .warnbox { border:1.5px solid var(--accent); }
   .todaybar { display:flex; gap:6px; overflow-x:auto; padding:8px 0 2px; scrollbar-width:none; }
@@ -444,6 +444,38 @@ const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date
 const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return isoOf(d); };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const place = id => db.places.find(p => p.id === id) || { name:'Other', color:'#888' };
+/* ---- Colour contrast: text always stays readable, whatever colour a place has ---- */
+function rgbOf(c) {
+  c = String(c || '').trim(); let m = c.match(/^#([0-9a-f]{3})$/i);
+  if (m) return m[1].split('').map(h => parseInt(h + h, 16));
+  m = c.match(/^#([0-9a-f]{6})/i); if (m) return [0, 2, 4].map(i => parseInt(m[1].substr(i, 2), 16));
+  m = c.match(/rgba?\(([^)]+)\)/i); if (m) return m[1].split(',').slice(0, 3).map(Number);
+  return [136, 136, 136];
+}
+function lumOf(rgb) { const f = v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }; return .2126 * f(rgb[0]) + .7152 * f(rgb[1]) + .0722 * f(rgb[2]); }
+const contrastOf = (a, b) => { const x = lumOf(a), y = lumOf(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+const hexOf = rgb => '#' + rgb.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+const mixRgb = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+function pageIsDark() { return lumOf(rgbOf(getComputedStyle(document.documentElement).getPropertyValue('--bg'))) < .2; }
+// Text colour to put ON a coloured background (dark text on light colours, white on dark ones)
+function ink(bg, dim) { let c = rgbOf(bg); if (dim) c = c.map(v => v * dim); const w = contrastOf(c, [255, 255, 255]); return w >= 3.5 || w >= contrastOf(c, [17, 17, 17]) ? '#fff' : '#111'; }
+// A place colour used AS text: darken it on a light page / lighten it on a dark page until it's readable
+function toHsl([r, g, b]) { r /= 255; g /= 255; b /= 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2; let h = 0, s = 0;
+  if (mx !== mn) { const d = mx - mn; s = l > .5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h /= 6; }
+  return [h, s, l]; }
+function fromHsl([h, s, l]) { if (!s) return [l * 255, l * 255, l * 255]; const q = l < .5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+  const f = t => { t = (t + 1) % 1; return t < 1/6 ? p + (q - p) * 6 * t : t < .5 ? q : t < 2/3 ? p + (q - p) * (2/3 - t) * 6 : p; };
+  return [f(h + 1/3) * 255, f(h) * 255, f(h - 1/3) * 255]; }
+// A place colour used AS text: same hue, made darker on a light page / lighter on a dark page until readable
+const _txtCache = {};
+function txt(c) {
+  const dark = pageIsDark(), key = c + (dark ? 'd' : 'l'); if (_txtCache[key]) return _txtCache[key];
+  const page = dark ? [28, 28, 30] : [255, 255, 255]; let [h, s, l] = toHsl(rgbOf(c)), out = rgbOf(c);
+  if (!dark) s = Math.min(1, s * 1.1);
+  for (let i = 0; i < 60 && contrastOf(out, page) < 4.5; i++) { l = dark ? Math.min(1, l + .02) : Math.max(0, l - .02); out = fromHsl([h, s, l]); }
+  return (_txtCache[key] = hexOf(out));
+}
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { try { render(); } catch (e) {} }); } catch (e) {}
 const todayIso = () => isoOf(new Date());
 const toMin = t => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 
@@ -658,7 +690,7 @@ document.getElementById('chips').onclick = e => {
 function cellItems(date) {
   return entriesFor(date).map(e => {
     const p = place(e.placeId), time = fmtRange(e.start, e.end), done = doneSet(e, date);
-    let s = `<div class="sec"><div class="pl" style="color:${esc(p.color)}">${esc(p.name)}${time ? ' <span class="tm">' + time + '</span>' : ''}</div>`;
+    let s = `<div class="sec"><div class="pl" style="color:${txt(p.color)}">${esc(p.name)}${time ? ' <span class="tm">' + time + '</span>' : ''}</div>`;
     e.tasks.forEach((tk, i) => { if (tk) s += `<div class="${done.has(i) ? 'done' : ''}">-${taskT(e, i) ? `<span class="tm ttm">${fmtTime(taskT(e, i))}</span> ` : ''}${esc(tk)}-</div>`; });
     return s + '</div>';
   }).join('');
@@ -719,13 +751,13 @@ function renderWeek(fitH) {
     const list = entriesFor(date), lanes = layoutLanes(list), boxes = [];
     list.forEach(en => {
       const p = place(en.placeId);
-      if (!en.start) { a += `<div class="allblk" style="background:${esc(p.color)}" data-date="${date}" data-id="${en.id}">${esc(p.name)}</div>`; return; }
+      if (!en.start) { a += `<div class="allblk" style="background:${esc(p.color)};color:${ink(p.color)}" data-date="${date}" data-id="${en.id}">${esc(p.name)}</div>`; return; }
       const L = lanes[en.id], top = Math.max(0, y(L.s)), h = Math.max(Math.min(22, H - 2), y(L.f) - top - 2);
       const left = L.lane / L.cols * 100, width = 100 / L.cols;
       boxes.push({ top, bot: top + h, left, width });
       const dn = doneSet(en, date);
       const tasks = en.tasks.map((t, ti) => t ? `<span class="bt${dn.has(ti) ? ' done' : ''}">${taskT(en, ti) ? `<i class="btt">${fmtTime(taskT(en, ti))}</i>` : ''}${esc(t)}</span>` : '').join('');
-      c += `<div class="blk${L.cols > 1 ? ' ov' : ''}${L.cols > 1 && L.lane % 2 ? ' alt' : ''}" style="top:${top}px;height:${h}px;left:calc(${left}% + 1px);width:calc(${width}% - 2px);background:${esc(p.color)}" data-date="${date}" data-id="${en.id}"><b>${esc(p.name)}</b><span class="tm">${fmtRange(en.start, en.end)}</span>${tasks}</div>`;
+      c += `<div class="blk${L.cols > 1 ? ' ov' : ''}${L.cols > 1 && L.lane % 2 ? ' alt' : ''}" style="top:${top}px;height:${h}px;left:calc(${left}% + 1px);width:calc(${width}% - 2px);background:${esc(p.color)};color:${ink(p.color, L.cols > 1 && L.lane % 2 ? .82 : 0)}" data-date="${date}" data-id="${en.id}"><b>${esc(p.name)}</b><span class="tm">${fmtRange(en.start, en.end)}</span>${tasks}</div>`;
     });
     const pt = prayerTimes(date);
     PRAYERS.forEach(([k, name]) => {
@@ -807,7 +839,7 @@ function updateNextPrayer() {   // the "today" bar at the top
   const list = entriesFor(t, true).filter(e => e.start);
   const cur = list.filter(e => toMin(e.start) <= n && n < endMin(e));
   const nxt = list.find(e => toMin(e.start) > n);
-  const chip = (e, label, extra) => `<button class="tb" data-today="1"><small>${label}</small> <b style="color:${esc(place(e.placeId).color)}">${esc(place(e.placeId).name)}</b> <span class="tm">${extra}</span></button>`;
+  const chip = (e, label, extra) => `<button class="tb" data-today="1"><small>${label}</small> <b style="color:${txt(place(e.placeId).color)}">${esc(place(e.placeId).name)}</b> <span class="tm">${extra}</span></button>`;
   let html = `<button class="tb pick" id="pickDay">📅 Go to a day ▾</button>`;
   html += cur.map(e => chip(e, 'Now', e.end ? 'till ' + fmtTime(e.end) : fmtTime(e.start))).join('');
   if (nxt) html += chip(nxt, 'Next', `${fmtTime(nxt.start)} · in ${inTime(toMin(nxt.start) - n)}`);
@@ -923,7 +955,7 @@ function openQuick(base) {
     if (!cur) { prev.style.display = 'none'; return; }
     const p = cur.placeId ? place(cur.placeId) : null;
     prev.style.display = '';
-    prev.innerHTML = `<b style="color:${p ? esc(p.color) : 'inherit'}">${p ? esc(p.name) : cur.newPlace ? esc(cur.newPlace) + ' <small class="meta">(new place)</small>' : '<span class="warn">Which place?</span>'}</b>
+    prev.innerHTML = `<b style="color:${p ? txt(p.color) : 'inherit'}">${p ? esc(p.name) : cur.newPlace ? esc(cur.newPlace) + ' <small class="meta">(new place)</small>' : '<span class="warn">Which place?</span>'}</b>
       <span class="tm">${fmtRange(cur.start, cur.end) || 'no time'}</span><br>📅 ${longDate(cur.date)}
       ${cur.repeat ? `<br>↻ ${repeatText(cur.repeat)}` : ''}${cur.remind != null ? `<br>🔔 ${remindLabel(cur.remind)}` : ''}
       ${cur.tasks.length ? '<br>' + cur.tasks.map(t => '– ' + esc(t)).join('<br>') : ''}`;
@@ -996,8 +1028,8 @@ function openDay(date) {
   list.forEach(e => {
     const p = place(e.placeId), done = doneSet(e, date);
     html += `<div class="entry" data-edit="${e.id}" style="border-left-color:${esc(p.color)}">
-      <div class="top"><span><span style="color:${esc(p.color)}">${esc(p.name)}</span>
-        <span class="tm" style="color:${esc(p.color)}">${fmtRange(e.start, e.end)}</span>
+      <div class="top"><span><span style="color:${txt(p.color)}">${esc(p.name)}</span>
+        <span class="tm" style="color:${txt(p.color)}">${fmtRange(e.start, e.end)}</span>
         </span></div>
       ${e.tasks.map((t, i) => t ? `<div class="chk"><input type="checkbox" data-e="${e.id}" data-i="${i}" ${done.has(i) ? 'checked' : ''}><span class="${done.has(i) ? 'done' : ''}">${taskT(e, i) ? `<b class="tm ttm2">${fmtTime(taskT(e, i))}</b> ` : ''}${esc(t)}</span></div>` : '').join('')}
       ${e.note ? `<div class="note">${esc(e.note)}</div>` : ''}
@@ -1009,7 +1041,7 @@ function openDay(date) {
     <div class="two"><button class="secondary" id="tplApply">📋 Use a template</button><button class="secondary" id="tplSave" ${list.length ? '' : 'disabled style="opacity:.4"'}>Save day as template</button></div>`;
   const missing = db.entries.filter(e => e.repeat && !occurs(e, date));
   if (missing.length) html += `<div class="lbl">Add a repeating item to this day only</div><div class="quick">` +
-    missing.map(e => `<button data-q="${e.id}" style="color:${esc(place(e.placeId).color)}">+ ${esc(place(e.placeId).name)} ${fmtRange(e.start, e.end)}</button>`).join('') + '</div>';
+    missing.map(e => `<button data-q="${e.id}" style="color:${txt(place(e.placeId).color)}">+ ${esc(place(e.placeId).name)} ${fmtRange(e.start, e.end)}</button>`).join('') + '</div>';
   showSheet(longDate(date), html, null, 'day');
 
   // Tap anywhere on a place card to edit it; only the checkbox itself ticks a task
@@ -1342,7 +1374,7 @@ function itemRepeat(date, e, back) {
 function openTransfer(from, e, kind, backTo) {
   const goBack = backTo || (() => openEditor(from, e.id));
   const p = place(e.placeId), verb = kind === 'copy' ? 'Copy' : 'Move';
-  const summary = `<b style="color:${esc(p.color)}">${esc(p.name)}</b> <span class="tm">${fmtRange(e.start, e.end)}</span>` +
+  const summary = `<b style="color:${txt(p.color)}">${esc(p.name)}</b> <span class="tm">${fmtRange(e.start, e.end)}</span>` +
     (e.tasks.length ? `<br>${e.tasks.map(esc).join(', ')}` : '');
   showSheet(`${verb} to another day`, `
     <div class="box">${summary}<div class="meta">From ${longDate(from)}</div></div>
@@ -1380,7 +1412,7 @@ function openTransfer(from, e, kind, backTo) {
 /* ================= Templates ================= */
 function saveTemplate(date) {
   const items = entriesFor(date, true);
-  showSheet('Save as template', `<div class="box">${items.map(e => `<b style="color:${esc(place(e.placeId).color)}">${esc(place(e.placeId).name)}</b> <span class="tm">${fmtRange(e.start, e.end)}</span>${e.tasks.length ? ' · ' + e.tasks.map(esc).join(', ') : ''}`).join('<br>')}</div>
+  showSheet('Save as template', `<div class="box">${items.map(e => `<b style="color:${txt(place(e.placeId).color)}">${esc(place(e.placeId).name)}</b> <span class="tm">${fmtRange(e.start, e.end)}</span>${e.tasks.length ? ' · ' + e.tasks.map(esc).join(', ') : ''}`).join('<br>')}</div>
     <label>Template name</label><input type="text" id="tplName" placeholder="e.g. Clinic day">
     <label class="chk"><input type="checkbox" id="tplTasks" checked><span>Include tasks</span></label>
     <div style="height:12px"></div><button class="primary" id="tplGo">Save template</button>`, () => openDay(date), 'other');
@@ -1426,7 +1458,7 @@ function openTodo() {
   list.forEach(({ e, d, i, t }) => {
     if (d !== last) { html += `<div class="lbl">${longDate(d)}</div>`; last = d; }
     const p = place(e.placeId);
-    html += `<div class="todo"><label class="chk" style="flex:1"><input type="checkbox" data-e="${e.id}" data-d="${d}" data-i="${i}"><span>${esc(t)} <small style="color:${esc(p.color)}">· ${esc(p.name)}</small></span></label>
+    html += `<div class="todo"><label class="chk" style="flex:1"><input type="checkbox" data-e="${e.id}" data-d="${d}" data-i="${i}"><span>${esc(t)} <small style="color:${txt(p.color)}">· ${esc(p.name)}</small></span></label>
       <button class="mini" data-mv="${e.id}|${d}|${i}">→ Today</button><button class="mini x" data-rm="${e.id}|${d}|${i}" aria-label="Remove">✕</button></div>`;
   });
   html += `<label class="chk" style="margin-top:18px"><input type="checkbox" id="carryRep" ${db.carryRepeats ? 'checked' : ''}><span>Include tasks from repeating items</span></label>`;
@@ -1509,7 +1541,7 @@ function openShare() {
   showSheet('Share schedule', `
     <label>Dates</label><select id="sRange">${rangeOpts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
     <div class="row" id="sCustom" style="display:none;margin-top:8px"><input type="date" id="sFrom"><input type="date" id="sTo"></div>
-    <label>Places</label><div class="quick" id="sPlaces">${db.places.map(p => `<button data-p="${esc(p.id)}" class="${!o.places.length || o.places.includes(p.id) ? 'on' : ''}" style="--c:${esc(p.color)}">${esc(p.name)}</button>`).join('')}</div>
+    <label>Places</label><div class="quick" id="sPlaces">${db.places.map(p => `<button data-p="${esc(p.id)}" class="${!o.places.length || o.places.includes(p.id) ? 'on' : ''}" style="--c:${esc(p.color)};--ci:${ink(p.color)}">${esc(p.name)}</button>`).join('')}</div>
     <label class="chk"><input type="checkbox" id="sTasks" checked><span>Include tasks</span></label>
     <label class="chk"><input type="checkbox" id="sNotes"><span>Include notes</span></label>
     <label>Preview</label><pre class="preview" id="sPrev"></pre>
@@ -1551,7 +1583,7 @@ function openSearch() {
         return { e, date };
       }).sort((a, b) => (a.date || '9').localeCompare(b.date || '9'));
     out.innerHTML = rows.length ? rows.map(({ e, date }) => `<div class="res" data-d="${date || ''}">
-      <b style="color:${esc(place(e.placeId).color)}">${esc(place(e.placeId).name)}</b> <span class="tm">${fmtRange(e.start, e.end)}</span>
+      <b style="color:${txt(place(e.placeId).color)}">${esc(place(e.placeId).name)}</b> <span class="tm">${fmtRange(e.start, e.end)}</span>
       ${e.tasks.length ? '<br>' + e.tasks.map(esc).join(', ') : ''}
       <small>${e.repeat ? `↻ ${repeatText(e.repeat)}${date ? ' · next ' + shortDate(date) : ''}` : longDate(e.date)}</small></div>`).join('')
       : '<div class="empty-msg">No matches.</div>';
