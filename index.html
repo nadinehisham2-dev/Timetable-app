@@ -458,7 +458,7 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 /* ================= Helpers ================= */
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 // Week columns follow the "Week starts on" setting (default Saturday). Fri & Sat are shaded as the weekend.
-const APP_VERSION = '2026.11.25-d';
+const APP_VERSION = '2026.11.25-e';
 const DOW_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], WEEKEND_DOW = [5, 6];
 let DAYS, COL2DOW, WEEKEND;
 const WS = () => (ui.weekStart ?? 6);
@@ -593,9 +593,9 @@ function remindPicker(id, val, presets = REMIND_OPTS, zero) {
   let n = '', u = 1;
   if (custom) for (const [unit] of UNITS) if (val % unit === 0) { n = val / unit; u = unit; break; }
   return `<select id="${id}" class="rp">${presets.map(o => `<option value="${o}" ${!custom && o === val ? 'selected' : ''}>${remindLabel(o, zero)}</option>`).join('')}
-      <option value="custom" ${custom ? 'selected' : ''}>Custom…</option></select>
+      <option value="custom" ${custom ? 'selected' : ''}>Other… (type it)</option></select>
     <div id="${id}C" class="row" style="margin-top:8px;${custom ? '' : 'display:none'}">
-      <input type="number" inputmode="numeric" min="1" id="${id}N" value="${n}" placeholder="e.g. 3">
+      <input type="text" id="${id}N" value="${n}" placeholder="e.g. 45 min, 2 hours, 1 day" autocomplete="off">
       <select id="${id}U">${[[1,'minutes'],[60,'hours'],[1440,'days'],[10080,'weeks']].map(([v, l]) => `<option value="${v}" ${v === u ? 'selected' : ''}>${l} before</option>`).join('')}</select>
     </div>`;
 }
@@ -611,9 +611,11 @@ function readPicker(id) {   // null = none, number = minutes, undefined = invali
   const v = document.getElementById(id).value;
   if (v === 'null') return null;
   if (v !== 'custom') return +v;
-  const n = parseFloat(document.getElementById(id + 'N').value);
+  const raw = document.getElementById(id + 'N').value.trim().toLowerCase(), n = parseFloat(raw.replace(/^an?\b/, '1').replace(/half/, '0.5'));
   if (!(n > 0)) return undefined;
-  return Math.round(n * +document.getElementById(id + 'U').value);
+  const u = raw.match(/(min|m\b|hour|hr|h\b|day|d\b|week|wk|w\b)/);   // a unit typed in the box wins over the list
+  const mult = u ? ({ min:1, m:1, hour:60, hr:60, h:60, day:1440, d:1440, week:10080, wk:10080, w:10080 })[u[1]] : +document.getElementById(id + 'U').value;
+  return Math.round(n * mult);
 }
 const setPicker = (id, val, presets = REMIND_OPTS) => {
   const sel = document.getElementById(id);
@@ -1224,7 +1226,9 @@ function openEditor(date, id) {
       <option value="none">Never (this day only)</option><option value="daily">Every day</option>
       <option value="weekly">Every week / every few weeks on…</option><option value="monthly">Every month (same date)</option>
       <option value="monthNth">Every month on certain weeks (e.g. 1st & 3rd Sun)</option>
+      <option value="other">Other… (type it)</option>
     </select>
+    <div id="fRepOther" style="display:none"></div>
     <div id="fRepeatBox">
       <div id="fEveryWrap" class="row" style="margin-top:8px;align-items:center"><span style="flex:none">Repeat</span>
         <select id="fEvery">${[[1,'every week'],[2,'every other week (one yes, one no)'],[3,'every 3 weeks'],[4,'every 4 weeks']].map(([v, l]) => `<option value="${v}" ${(r.every || 1) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
@@ -1252,13 +1256,14 @@ function openEditor(date, id) {
 
   const freq = document.getElementById('fFreq'); freq.value = e.repeat ? e.repeat.freq : 'none';
   const syncRepeatUI = () => {
-    document.getElementById('fRepeatBox').style.display = freq.value === 'none' ? 'none' : '';
+    document.getElementById('fRepeatBox').style.display = ['none', 'other'].includes(freq.value) ? 'none' : '';
     document.getElementById('fDaysWrap').style.display = ['weekly', 'monthNth'].includes(freq.value) ? '' : 'none';
     document.getElementById('fEveryWrap').style.display = freq.value === 'weekly' ? '' : 'none';
     document.getElementById('fNthWrap').style.display = freq.value === 'monthNth' ? '' : 'none';
   };
   document.getElementById('fNth').onclick = ev => { const b = ev.target.closest('button'); if (b) b.classList.toggle('on'); };
   freq.onchange = syncRepeatUI; syncRepeatUI(); wirePicker('fRemind');
+  const otherRule = wireRepeatOther('fFreq', 'fRepOther', date);
   document.getElementById('fDays').onclick = ev => { const b = ev.target.closest('button'); if (b) b.classList.toggle('on'); };
 
   const sel = document.getElementById('fPlace');
@@ -1270,8 +1275,14 @@ function openEditor(date, id) {
     if (sel.value === '__new') document.getElementById('fNewName').focus();
   });
 
+  const readFormBase = () => ({
+    placeId: sel.value, start: readTime(document.getElementById('fStart')) || '', end: readTime(document.getElementById('fEnd')) || '',
+    ...(() => { const rows = [...tasksEl.querySelectorAll('.task-row')].map(rw => [rw.querySelector('.tx').value.trim(), readTime(rw.querySelector('.tt')) || '']).filter(([t]) => t);
+      return { tasks: rows.map(([t]) => t), taskTimes: rows.map(([, tm]) => tm) }; })(),
+    note: document.getElementById('fNote').value.trim(), remind: readPicker('fRemind') });
   const readForm = () => {
     const f = freq.value;
+    if (f === 'other') { const rr = otherRule(); return { ...readFormBase(), repeat: rr ? { ...rr, anchor: (orig && orig.repeat && (orig.repeat.anchor || orig.date)) || date } : 'bad' }; }
     return {
       placeId: sel.value, start: readTime(document.getElementById('fStart')) || '', end: readTime(document.getElementById('fEnd')) || '',
       ...(() => { const rows = [...tasksEl.querySelectorAll('.task-row')].map(rw => [rw.querySelector('.tx').value.trim(), readTime(rw.querySelector('.tt')) || '']).filter(([t]) => t);
@@ -1300,6 +1311,7 @@ function openEditor(date, id) {
       document.getElementById('fNewPlace').style.display = 'none';
     }
     const data = readForm();
+    if (data.repeat === 'bad') return toast('Type how it repeats, e.g. "every other Monday"');
     if (!data.placeId) return toast('Choose a place');
     if (data.remind === undefined) return toast('Type how long before you want the reminder');
     if (!clashOk && data.start) {
@@ -1387,11 +1399,170 @@ function seriesScope(kind, orig, date, data, backTo) {
     { label:`This day only (${shortDate(date)})`, cls:'primary', fn:dayOnly },
     { label:`This day and the days after it`, cls:'secondary', fn:() => range(date, null) },
     { label:'Choose dates…', fn:pickDates },
+    { label:'Other… (type it in your own words)', fn:() => otherEdit(date, orig, data, () => seriesScope(kind, orig, date, data, backTo)) },
     { label: del ? 'Every day, past included (delete all)' : 'All days, past included', cls: del ? 'danger' : 'secondary',
       fn:() => del ? withUndo('Series deleted', () => { db.entries = db.entries.filter(x => x !== orig); }, done)
                    : withUndo('Series updated', () => Object.assign(orig, data, { date: data.repeat ? orig.date : date }), done) },
   ], back);
   body.insertAdjacentHTML('beforeend', `<div class="meta" style="margin-top:10px">Days before the ones you pick stay exactly as they were.</div>`);
+}
+
+/* ===== "Other…": type which days you mean in your own words; the app works it out and shows it before doing anything ===== */
+// Day names (full, short or plural), without catching words like "month" or "sunrise"
+const DAY_W = '\\b(sat|sun|mon|tue|wed|thu|fri)(?:urday|day|sday|nesday|rsday|rs|r|s|es|ue|ues|ed|hu|ri)?s?\\b';
+const MON_W = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*', ORD = '(?:st|nd|rd|th)?';
+const DATE_W = `(?:today|tomorrow|\\d{1,2}${ORD}\\s+(?:of\\s+)?${MON_W}(?:\\s+\\d{4})?|${MON_W}\\s+\\d{1,2}${ORD}(?:,?\\s+\\d{4})?|\\d{1,2}[/.]\\d{1,2}(?:[/.]\\d{2,4})?|${MON_W}(?:\\s+\\d{4})?)`;
+// One date expression -> [first day, last day] (a month name means the whole month)
+function dateSpan(w) {
+  w = w.trim().toLowerCase(); const t = parse(todayIso()), near = (y, mo, d) => { let x = new Date(y ?? t.getFullYear(), mo, d); if (y == null && isoOf(x) < addDays(todayIso(), -60)) x.setFullYear(x.getFullYear() + 1); return isoOf(x); };
+  if (w === 'today') return [todayIso(), todayIso()];
+  if (w === 'tomorrow') { const d = addDays(todayIso(), 1); return [d, d]; }
+  let m = w.match(new RegExp(`^(\\d{1,2})${ORD}\\s+(?:of\\s+)?(${MON_W})(?:\\s+(\\d{4}))?$`)); if (m) { const d = near(m[3] ? +m[3] : null, MON_N[m[2].slice(0, 3)], +m[1]); return [d, d]; }
+  m = w.match(new RegExp(`^(${MON_W})\\s+(\\d{1,2})${ORD}(?:,?\\s+(\\d{4}))?$`)); if (m) { const d = near(m[3] ? +m[3] : null, MON_N[m[1].slice(0, 3)], +m[2]); return [d, d]; }
+  m = w.match(/^(\d{1,2})[/.](\d{1,2})(?:[/.](\d{2,4}))?$/); if (m) { const y = m[3] ? (m[3].length === 2 ? 2000 + +m[3] : +m[3]) : null, d = near(y, +m[2] - 1, +m[1]); return [d, d]; }
+  m = w.match(new RegExp(`^(${MON_W})(?:\\s+(\\d{4}))?$`)); if (m) { const mo = MON_N[m[1].slice(0, 3)]; let y = m[2] ? +m[2] : t.getFullYear(); if (!m[2] && mo < t.getMonth() - 1) y++; return [iso(y, mo, 1), iso(y, mo, new Date(y, mo + 1, 0).getDate())]; }
+  return null;
+}
+function parseDays(text, base) {
+  let s = ' ' + String(text || '').toLowerCase().replace(/[’']/g, '').replace(/\s+/g, ' ') + ' ';
+  const o = { dates:[], days:[], weeks:'all', nths:[], from:null, to:null, any:false };
+  const take = (re, fn) => { const m = s.match(re); if (m) { s = s.slice(0, m.index) + ' ' + s.slice(m.index + m[0].length); fn(m); } return m; };
+  const wkStart = d => { const x = parse(d); x.setDate(x.getDate() - colOf(x.getDay())); return isoOf(x); };
+  // Ranges
+  if (!take(new RegExp(`\\b(?:from|between)\\s+(${DATE_W})\\s+(?:to|until|till|and|-|–|through)\\s+(${DATE_W})\\b`), m => { o.from = dateSpan(m[1])[0]; o.to = dateSpan(m[2])[1]; }))
+    take(new RegExp(`\\b(${DATE_W})\\s*(?:-|–|to|till|until|through)\\s*(${DATE_W})\\b`), m => { o.from = dateSpan(m[1])[0]; o.to = dateSpan(m[2])[1]; });
+  take(new RegExp(`\\b(until|till|up to|through|to|before)\\s+(?:the\\s+end\\s+of\\s+)?(${DATE_W})\\b`), m => { const sp = dateSpan(m[2]); o.to = m[1] === 'before' ? addDays(sp[0], -1) : sp[1]; });
+  take(new RegExp(`\\b(from|after|starting|since|beginning)\\s+(?:on\\s+)?(${DATE_W})(?:\\s+(?:on|onwards|onward))?\\b`), m => { const sp = dateSpan(m[2]); o.from = m[1] === 'after' ? addDays(sp[1], 1) : sp[0]; });
+  take(new RegExp(`\\b(?:in|during|for|of|all\\s+of)\\s+(${MON_W}(?:\\s+\\d{4})?)\\b`), m => { const sp = dateSpan(m[1]); o.from = sp[0]; o.to = sp[1]; });
+  take(/\b(this|next)\s+month\b/, m => { const t = parse(todayIso()), k = m[1] === 'next' ? 1 : 0, y = t.getFullYear(), mo = t.getMonth() + k; o.from = isoOf(new Date(y, mo, 1)); o.to = isoOf(new Date(y, mo + 1, 0)); });
+  take(/\b(this|next)\s+week\b/, m => { o.from = addDays(wkStart(todayIso()), m[1] === 'next' ? 7 : 0); o.to = addDays(o.from, 6); });
+  take(/\b(?:for\s+the\s+|the\s+|for\s+)?next\s+(\d+)\s+(day|week|month)s?\b/, m => { o.from = o.from || base; const n = +m[1]; o.to = m[2] === 'day' ? addDays(o.from, n - 1) : m[2] === 'week' ? addDays(o.from, n * 7 - 1) : isoOf(new Date(parse(o.from).getFullYear(), parse(o.from).getMonth() + n, parse(o.from).getDate() - 1)); });
+  take(/\bfrom\s+(?:now|today)(?:\s+on)?\b|\bonwards?\b/, () => { o.from = o.from || todayIso(); });
+  // Specific dates: "7, 14 and 21 dec", "7 dec", "12/12", "today"
+  let m;
+  while ((m = s.match(new RegExp(`\\b((?:\\d{1,2}${ORD}\\s*(?:,|&|and|\\s)\\s*)+)(?:of\\s+)?(${MON_W})(?:\\s+(\\d{4}))?\\b`)))) {
+    const nums = [...m[1].matchAll(/\d{1,2}/g)].map(x => x[0]);
+    const last = nums.pop(); [...nums, last].forEach(n => o.dates.push(dateSpan(`${n} ${m[2]}${m[3] ? ' ' + m[3] : ''}`)[0]));
+    s = s.slice(0, m.index) + ' ' + s.slice(m.index + m[0].length);
+  }
+  while ((m = s.match(new RegExp(`\\b(${MON_W})\\s+(\\d{1,2})${ORD}\\b|\\b(\\d{1,2}[/.]\\d{1,2}(?:[/.]\\d{2,4})?)\\b|\\b(today|tomorrow)\\b`)))) {
+    o.dates.push(dateSpan(m[0])[0]); s = s.slice(0, m.index) + ' ' + s.slice(m.index + m[0].length);
+  }
+  // Which weeks
+  if (take(/\b(every\s+other|alternate|alternating|one\s+yes\s*,?\s*one\s+no|every\s+(?:2nd|second|two|2)\s+weeks?|biweekly|fortnightly)\b/, () => {}))
+    o.weeks = /\b(next\s+week|skip(?:ping)?\s+this\s+week|not\s+this\s+week|keep\s+this\s+week)\b/.test(s) ? 'alt1' : 'alt0';
+  // Days of the week
+  take(/\bweekends?\b/, () => { o.days.push(5, 6); });
+  take(/\bweekdays?\b|\bworking\s+days\b/, () => { o.days.push(0, 1, 2, 3, 4); });
+  [...s.matchAll(new RegExp(DAY_W, 'g'))].forEach(x => o.days.push(DOW_N[x[1]]));
+  if (o.days.length) [...s.matchAll(/\b(1st|2nd|3rd|4th|5th|first|second|third|fourth|fifth|last)\b/g)].forEach(x => { const v = { '1st':1, first:1, '2nd':2, second:2, '3rd':3, third:3, '4th':4, fourth:4, '5th':5, fifth:5, last:-1 }[x[1]]; if (!o.nths.includes(v)) o.nths.push(v); });
+  if (o.nths.length) o.weeks = 'nth';
+  if (/\b(all|every\s*day|everything|daily|each\s+day|any\s+day)\b/.test(s)) o.any = true;
+  o.days = [...new Set(o.days)]; o.dates = [...new Set(o.dates.filter(Boolean))].sort();
+  o.ok = !!(o.dates.length || o.days.length || o.from || o.to || o.any);
+  return o;
+}
+function daySpecMatch(o, d, base) {
+  if (o.from && d < o.from) return false; if (o.to && d > o.to) return false;
+  if (o.dates.length && !o.days.length) return o.dates.includes(d);
+  if (o.days.length) {
+    const x = parse(d); if (!o.days.includes(x.getDay())) return false;
+    if (o.weeks === 'alt0' || o.weeks === 'alt1') {   // "this week" = the week of the first matching day
+      let f = o.from || base; for (let i = 0; i < 7 && !o.days.includes(parse(f).getDay()); i++) f = addDays(f, 1);
+      return ((wkIdx(d) - wkIdx(f)) % 2 + 2) % 2 === (o.weeks === 'alt0' ? 0 : 1);
+    }
+    if (o.weeks === 'nth') { const nth = Math.ceil(x.getDate() / 7), last = x.getDate() + 7 > new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate(); return o.nths.some(k => k === nth || (k === -1 && last)); }
+  }
+  return true;
+}
+function daySpecText(o, base, horizon) {
+  const parts = [];
+  if (o.dates.length && !o.days.length) parts.push(dateList(o.dates, 12));
+  if (o.days.length) {
+    const nm = o.days.map(d => DOW_LONG[d] + 's').join(' & ');
+    let f = o.from || base; for (let i = 0; i < 7 && !o.days.includes(parse(f).getDay()); i++) f = addDays(f, 1);
+    parts.push(o.weeks === 'alt0' ? `${nm}, every other week (starting the week of ${shortDate(f)})` : o.weeks === 'alt1' ? `${nm}, every other week (starting the week after ${shortDate(f)})`
+      : o.weeks === 'nth' ? `${nm} in the ${o.nths.map(k => NTH.find(n => n[0] === k)[1]).join(' & ')} week of the month` : `every ${o.days.map(d => DOW_LONG[d]).join(' & ')}`);
+  } else if (!o.dates.length) parts.push('every day it happens');
+  if (o.from || o.to || !(o.dates.length && !o.days.length)) parts.push(o.from && o.to ? `from ${shortDate(o.from)} to ${shortDate(o.to)}` : o.to ? `from ${shortDate(base)} until ${shortDate(o.to)}` : `from ${shortDate(o.from || base)}${horizon ? ' ' + horizon : ' onwards'}`);
+  return parts.join(', ');
+}
+// The shared "type it" sheet. candidates(spec) returns the days it would affect.
+function typeDays({ title, head, intro, examples, base, candidates, horizon, next, back }) {
+  showSheet(title, `${head || ''}<div class="meta" style="margin:6px 0 2px">${intro}</div>
+    <textarea id="tdText" style="min-height:70px" placeholder="${esc(examples[0])}"></textarea>
+    <div class="quick" id="tdEx" style="margin-top:6px">${examples.map(x => `<button type="button">${esc(x)}</button>`).join('')}</div>
+    <div class="box" id="tdPrev" style="margin-top:10px"><span class="meta">Type above, or tap an example. You'll see what the app understood before anything happens.</span></div>
+    <div style="height:12px"></div><button class="primary" id="tdGo" disabled>Next</button>`, back, 'other');
+  const ta = document.getElementById('tdText'), pv = document.getElementById('tdPrev'), go = document.getElementById('tdGo');
+  let cur = null;
+  const upd = () => {
+    const v = ta.value.trim(); cur = null;
+    if (!v) { go.disabled = true; pv.innerHTML = '<span class="meta">Type above, or tap an example.</span>'; return; }
+    const o = parseDays(v, base);
+    if (!o.ok) { go.disabled = true; pv.innerHTML = `<span class="warn">Sorry, I didn't understand that.</span><div class="meta">Try day names (Monday), "every other", "1st and 3rd", dates (7 Dec, 12/12) and ranges (from 1 Jan to 15 Feb, in January, next 4 weeks).</div>`; return; }
+    const ds = candidates(o);
+    cur = { o, ds, text: daySpecText(o, base, horizon && !o.to && !(o.dates.length && !o.days.length) ? horizon : '') };
+    pv.innerHTML = `I understood: <b>${esc(cur.text)}</b><div class="meta" style="margin-top:6px">${ds.length ? `${plural(ds.length, 'day')}: ${dateList(ds, 10)}` : 'That doesn’t match any day.'}</div>`;
+    go.disabled = !ds.length; go.textContent = ds.length ? `Next (${plural(ds.length, 'day')})` : 'Next';
+  };
+  ['input', 'change'].forEach(t => ta.addEventListener(t, upd));
+  document.getElementById('tdEx').onclick = ev => { const b = ev.target.closest('button'); if (b) { ta.value = b.textContent; upd(); } };
+  go.onclick = () => { if (cur && cur.ds.length) next(cur.ds, cur.text, cur.o); };
+  setTimeout(() => ta.focus(), 300);
+}
+function otherDelete(date, orig, back) {
+  typeDays({ title:'Other: type it', head:itemLabel(orig), intro:'Which days should it be removed from? Write it in your own words.', base:date, horizon: orig.repeat.until ? 'until it ends' : 'for the next 2 years',
+    examples:['every other Monday', '1st and 3rd Wednesday of the month', 'Mondays in January', '7, 14 and 21 Dec', 'from 1 Jan to 15 Feb', 'weekends next month'],
+    candidates: o => occDates(orig, o.from || (o.dates.length && !o.days.length ? o.dates[0] : date), o.to || (o.dates.length && !o.days.length ? o.dates[o.dates.length - 1] : null)).filter(d => daySpecMatch(o, d, date)),
+    next: (ds, text) => confirmRemove(orig, `It will be removed on <b>${esc(text)}</b>: ${plural(ds.length, 'day')} (${dateList(ds, 30)}). All other days stay as they are.`,
+      () => withUndo(`Removed from ${plural(ds.length, 'day')}`, () => removeDays(orig, ds), () => openDay(date)), () => otherDelete(date, orig, back)),
+    back });
+}
+function otherEdit(date, orig, data, back) {
+  typeDays({ title:'Other: type it', head:itemLabel(orig), intro:'Which days should your changes apply to? Write it in your own words.', base:date, horizon: orig.repeat.until ? 'until it ends' : 'for the next 12 months',
+    examples:['every Monday', 'every other Wednesday', 'all of December', 'next 4 weeks', '7, 14 and 21 Dec', 'from 1 Jan to 15 Feb'],
+    candidates: o => occDates(orig, o.from || (o.dates.length && !o.days.length ? o.dates[0] : date), o.to || (o.dates.length && !o.days.length ? o.dates[o.dates.length - 1] : (orig.repeat.until || addDays(date, 365)))).filter(d => daySpecMatch(o, d, date)),
+    next: (ds, text) => ask('Apply changes?', `${itemLabel(orig)}<div style="margin-top:8px">Your changes will apply on <b>${esc(text)}</b>: ${plural(ds.length, 'day')} (${dateList(ds, 30)}). Other days stay as they are.</div>`, [
+      { label:`Apply to ${plural(ds.length, 'day')}`, cls:'primary', fn:() => withUndo(`Changed ${plural(ds.length, 'day')}`, () => ds.forEach(d => {
+          removeDays(orig, [d]);
+          db.entries.push({ ...clone(orig), ...clone(data), repeat:null, id:uid(), date:d, skip:[], extra:[], done: orig.done[d] ? { [d]: orig.done[d] } : {}, drop:{} });
+        }), () => openDay(date)) },
+      { label:'Cancel', fn:() => otherEdit(date, orig, data, back) },
+    ], () => otherEdit(date, orig, data, back)),
+    back });
+}
+// Repeat: "Other… (type it)" -> a repeat rule
+function parseRepeatText(text, base) {
+  let t = ' ' + String(text || '').toLowerCase().replace(/[’']/g, '') + ' ', until = '';
+  t = t.replace(new RegExp(`\\b(?:until|till|through|up to|to)\\s+(?:the\\s+end\\s+of\\s+)?(${DATE_W})\\b`), (_, d) => { const sp = dateSpan(d); if (sp) until = sp[1]; return ' '; });
+  t = t.replace(/\bfor\s+(\d+)\s+(week|month)s?\b/, (_, n, u) => { until = u === 'week' ? addDays(base, +n * 7 - 1) : isoOf(new Date(parse(base).getFullYear(), parse(base).getMonth() + +n, parse(base).getDate() - 1)); return ' '; });
+  t = t.replace(/\bweekends?\b/g, ' fri sat ').replace(/\b(weekdays?|working days)\b/g, ' sun mon tue wed thu ')
+       .replace(/\b(biweekly|fortnightly|alternate|alternating|one yes,? one no)\b/g, ' every other ').replace(/\bevery\s+week\s+on\b/g, ' every ').replace(/\bon\s+(?=(sat|sun|mon|tue|wed|thu|fri))/g, ' ');
+  let except = [];
+  t = t.replace(/\b(?:except|but not|apart from|not on)\s+((?:(?:sat|sun|mon|tue|wed|thu|fri)[a-z]*(?:\s*(?:,|&|and)\s*|\s+))+)/, (_, d) => { except = [...d.matchAll(/(sat|sun|mon|tue|wed|thu|fri)/g)].map(x => DOW_N[x[1]]); return ' '; });
+  t = t.replace(/\b(?:of\s+)?(?:the|every|each)?\s*month\b/g, ' ');
+  if (!/\bevery\b/.test(t) && new RegExp(DAY_W).test(t) && !/\b(1st|2nd|3rd|4th|5th|first|second|third|fourth|fifth|last)\b/.test(t)) t = ' every ' + t;
+  let rep = parseQuick(t, base).repeat;
+  if (!rep && except.length) rep = { freq:'daily', days:[], until:'' };
+  if (!rep) return null;
+  if (except.length) { const all = rep.freq === 'daily' ? [0, 1, 2, 3, 4, 5, 6] : rep.days; rep = { ...rep, freq: rep.freq === 'daily' ? 'weekly' : rep.freq, every: rep.every || 1, days: all.filter(d => !except.includes(d)) }; }
+  return { every:1, nths:[], days:[], ...rep, until };
+}
+// Wire an "Other… (type it)" option into a Repeat list. Returns a getter for the typed rule.
+function wireRepeatOther(selId, boxId, base) {
+  const sel = document.getElementById(selId), box = document.getElementById(boxId); let rule = null;
+  box.innerHTML = `<input type="text" id="${boxId}T" placeholder="e.g. every other Mon & Wed until 31 Jan" autocomplete="off" style="margin-top:8px">
+    <div class="quick" style="margin-top:6px">${['every weekday', 'every other Sunday', '1st and 3rd Monday', 'every day except Friday', 'Mon & Thu for 8 weeks'].map(x => `<button type="button">${x}</button>`).join('')}</div>
+    <div class="box" id="${boxId}P" style="margin-top:8px"><span class="meta">Type how it repeats. Weekdays means Sunday to Thursday.</span></div>`;
+  const inp = document.getElementById(boxId + 'T'), pv = document.getElementById(boxId + 'P');
+  const upd = () => { rule = parseRepeatText(inp.value, base);
+    pv.innerHTML = !inp.value.trim() ? '<span class="meta">Type how it repeats. Weekdays means Sunday to Thursday.</span>' : rule ? `I understood: <b>${esc(repeatText(rule))}</b>${rule.until ? ' until ' + shortDate(rule.until) : ''}` : `<span class="warn">Sorry, I didn't understand that.</span><div class="meta">Try: every Mon & Wed, every other Tue, 1st and 3rd Sun, every day except Fri, until 31 Jan, for 8 weeks.</div>`; };
+  inp.addEventListener('input', upd);
+  box.querySelector('.quick').onclick = ev => { const b = ev.target.closest('button'); if (b) { inp.value = b.textContent; upd(); } };
+  const show = () => { box.style.display = sel.value === 'other' ? '' : 'none'; };
+  sel.addEventListener('change', show); show();
+  return () => rule;
 }
 
 /* ===== Deleting a repeating item: choose exactly which days, see what will happen, then confirm ===== */
@@ -1409,6 +1580,7 @@ function deleteFlow(date, orig, back) {
     { label:'Choose specific dates…', fn:() => pickDays(date, orig, me) },
     { label:'A certain weekday (every week, every other week…)', fn:() => pickWeekday(date, orig, me) },
     { label:'Between two dates…', fn:() => pickRange(date, orig, me) },
+    { label:'Other… (type it in your own words)', fn:() => otherDelete(date, orig, me) },
     { label:'Delete it from every day (past included)', cls:'danger', fn:() => confirmRemove(orig,
         `The whole repeating item will be deleted: <b>every day it appears on, past and future</b>, including its notes and ticked tasks.`,
         () => run('Repeating item deleted', () => { db.entries = db.entries.filter(x => x !== orig); }), me, 'Delete everything') },
@@ -1600,7 +1772,9 @@ function itemRepeat(date, e, back) {
       <option value="none">Never (this day only)</option><option value="daily">Every day</option>
       <option value="weekly">Every week / every few weeks on…</option><option value="monthly">Every month (same date)</option>
       <option value="monthNth">Every month on certain weeks (e.g. 1st & 3rd Sun)</option>
+      <option value="other">Other… (type it)</option>
     </select>
+    <div id="rpOther" style="display:none"></div>
     <div id="rpBox">
       <div id="rpEveryWrap" class="row" style="margin-top:8px;align-items:center"><span style="flex:none">Repeat</span>
         <select id="rpEvery">${[[1,'every week'],[2,'every other week (one yes, one no)'],[3,'every 3 weeks'],[4,'every 4 weeks']].map(([v, l]) => `<option value="${v}" ${(r.every || 1) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
@@ -1611,16 +1785,18 @@ function itemRepeat(date, e, back) {
     <div style="height:14px"></div><button class="primary" id="rpSave">Save</button>`, back, 'other');
   const f = document.getElementById('rpFreq'); f.value = e.repeat ? e.repeat.freq : 'none';
   const sync = () => {
-    document.getElementById('rpBox').style.display = f.value === 'none' ? 'none' : '';
+    document.getElementById('rpBox').style.display = ['none', 'other'].includes(f.value) ? 'none' : '';
     document.getElementById('rpDaysWrap').style.display = ['weekly', 'monthNth'].includes(f.value) ? '' : 'none';
     document.getElementById('rpEveryWrap').style.display = f.value === 'weekly' ? '' : 'none';
     document.getElementById('rpNthWrap').style.display = f.value === 'monthNth' ? '' : 'none';
   };
   f.onchange = sync; sync();
+  const rpRule = wireRepeatOther('rpFreq', 'rpOther', date);
   ['rpDays', 'rpNth'].forEach(id => document.getElementById(id).onclick = ev => { const b = ev.target.closest('button'); if (b) b.classList.toggle('on'); });
   document.getElementById('rpSave').onclick = () => {
     const v = f.value;
-    const rep = v === 'none' ? null : { freq:v, until:document.getElementById('rpUntil').value,
+    if (v === 'other' && !rpRule()) return toast('Type how it repeats, e.g. "every other Monday"');
+    const rep = v === 'other' ? { ...rpRule(), anchor: (e.repeat && (e.repeat.anchor || e.date)) || date } : v === 'none' ? null : { freq:v, until:document.getElementById('rpUntil').value,
       anchor: (e.repeat && (e.repeat.anchor || e.date)) || date,
       every: v === 'weekly' ? +document.getElementById('rpEvery').value : 1,
       nths: v === 'monthNth' ? [...document.querySelectorAll('#rpNth .on')].map(b => +b.dataset.n) : [],
@@ -1652,7 +1828,7 @@ function miniCal(host, o) {   // o: { value:[iso], multi, start, onChange(list),
     draw(); if (o.onChange) o.onChange([...sel].sort());
   };
   draw();
-  return { get: () => [...sel].sort() };
+  return { get: () => [...sel].sort(), set: list => { sel = new Set(list); if (list.length) { const f = parse(list[0]); m.setFullYear(f.getFullYear(), f.getMonth(), 1); } draw(); if (o.onChange) o.onChange([...sel].sort()); } };
 }
 const dowName = iso => ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][parse(iso).getDay()];
 const DOW_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -1686,6 +1862,7 @@ function openTransfer(from, e, kind, backTo) {
     <div class="box">${summary}<div class="meta">From ${longDate(from)}</div></div>
     <label>${verb} to <span style="text-transform:none;letter-spacing:0">· ${kind === 'copy' ? 'tap one or more days' : 'tap a day'}</span></label>
     <div class="minical" id="tCal"></div>
+    ${kind === 'copy' ? `<button type="button" class="add-small" id="tOther" style="margin-top:6px">✎ Other: type the days (e.g. every Monday in December)</button>` : ''}
     <div class="box" id="tCheck" style="display:none"></div>
     ${e.repeat ? `<div class="meta" style="margin-top:8px">This is a repeating item: only ${shortDate(from)} is ${kind === 'copy' ? 'copied' : 'moved'}. The rest of the series stays as it is.</div>` : ''}
     <div style="height:14px"></div>
@@ -1694,7 +1871,7 @@ function openTransfer(from, e, kind, backTo) {
   const go = document.getElementById('tGo'), chk = document.getElementById('tCheck');
   const endMin = x => toMin(x.end) ?? toMin(x.start) + 60;
   let picked = [];
-  miniCal(document.getElementById('tCal'), { multi: kind === 'copy', start: from, disabled: d => d === from, onChange: list => {
+  const cal = miniCal(document.getElementById('tCal'), { multi: kind === 'copy', start: from, disabled: d => d === from, onChange: list => {
     picked = list;
     if (!list.length) { go.disabled = true; go.textContent = 'Choose a day first'; chk.style.display = 'none'; return; }
     const clashes = list.map(to => [to, e.start ? entriesFor(to, true).filter(x => x !== e && x.start && toMin(x.start) < endMin(e) && toMin(e.start) < endMin(x)) : []]).filter(([, c]) => c.length);
@@ -1703,6 +1880,14 @@ function openTransfer(from, e, kind, backTo) {
     go.disabled = false; go.textContent = list.length === 1 ? `Yes, ${verb.toLowerCase()} to ${shortDate(list[0])}` : `Yes, copy to ${list.length} days`;
   } });
   document.getElementById('tCancel').onclick = goBack;
+  const tO = document.getElementById('tOther');
+  if (tO) tO.onclick = () => typeDays({ title:'Copy: type the days', head:itemLabel(e), intro:'Which days should it be copied to? Write it in your own words.', base:addDays(from, 1), horizon:'for the next 3 months',
+    examples:['every Monday in December', 'next 4 weeks on Sun and Wed', 'every other Tuesday until 31 Jan', '7, 14 and 21 Dec', 'weekdays next week'],
+    candidates: o => { const st = o.from || (o.dates.length && !o.days.length ? o.dates[0] : addDays(from, 1)), en = o.to || (o.dates.length && !o.days.length ? o.dates[o.dates.length - 1] : addDays(st, 90)), out = [];
+      for (let d = st; d <= en && out.length < 200; d = addDays(d, 1)) if (d !== from && daySpecMatch(o, d, addDays(from, 1))) out.push(d); return out; },
+    next: ds => { openTransfer(from, e, kind, backTo); setTimeout(() => window._tCal && window._tCal.set(ds), 0); },
+    back: () => openTransfer(from, e, kind, backTo) });
+  window._tCal = cal;
   go.onclick = () => {
     if (!picked.length) return;
     withUndo(`${kind === 'copy' ? 'Copied' : 'Moved'} to ${picked.length === 1 ? shortDate(picked[0]) : picked.length + ' days'}`, () => {
@@ -2064,6 +2249,28 @@ function checkReminders() {
 }
 
 /* ================= Places & settings ================= */
+// Settings → Reset: clear the calendar after explaining exactly what goes, with a backup offered first
+function openReset() {
+  const n = db.entries.length, np = db.places.length, nt = db.templates.length;
+  showSheet('Reset', `<div class="box">This deletes <b>all ${plural(n, 'plan')}</b> in your calendar: every repeating and one-off plan, their tasks, ticks and notes.${supa.session ? '<div class="meta" style="margin-top:6px">You are signed in, so it is also deleted on <b>your other devices</b>.</div>' : ''}</div>
+    <label class="chk" style="text-transform:none;letter-spacing:0;font-size:15px;color:inherit;margin-top:12px"><input type="checkbox" id="rsPlaces"> Also delete my ${plural(np, 'place')} and their colours</label>
+    <label class="chk" style="text-transform:none;letter-spacing:0;font-size:15px;color:inherit"><input type="checkbox" id="rsTpl"> Also delete my ${plural(nt, 'template')}</label>
+    <label class="chk" style="text-transform:none;letter-spacing:0;font-size:15px;color:inherit"><input type="checkbox" id="rsPr"> Also turn off prayer reminders</label>
+    <div class="meta" style="margin-top:8px">Settings like text size and week start are kept. Tip: download a backup first so you can restore everything later.</div>
+    <button class="secondary" id="rsBackup" style="margin-top:12px">Download a backup first</button>
+    <button class="danger" id="rsGo">Delete everything…</button>`, openSettings, 'other');
+  document.getElementById('rsBackup').onclick = () => saveFile(`timetable-backup-${todayIso()}.json`, JSON.stringify(db, null, 2), 'application/json');
+  document.getElementById('rsGo').onclick = () => {
+    const pl = document.getElementById('rsPlaces').checked, tp = document.getElementById('rsTpl').checked, pr = document.getElementById('rsPr').checked;
+    const what = [`all ${plural(n, 'plan')}`, pl && `all ${plural(np, 'place')}`, tp && `all ${plural(nt, 'template')}`, pr && 'your prayer reminders'].filter(Boolean);
+    ask('Are you sure?', `This will permanently delete <b>${what.join(', ')}</b>${supa.session ? ' on all your devices' : ''}. It can only be undone with ↶ while the app stays open, or by restoring a backup.`, [
+      { label:'Yes, delete everything', cls:'danger', fn:() => withUndo('Calendar reset', () => {
+          db.entries = []; if (pl) { db.places = []; ui.filter = []; saveUI(); } if (tp) db.templates = []; if (pr) { db.prayerRemind = {}; db.prayerEnd = {}; }
+        }, closeSheet) },
+      { label:'Cancel', fn:openReset },
+    ], openReset);
+  };
+}
 function openSettings() {
   const rows = db.places.map(p => `<div class="place-row" data-id="${esc(p.id)}"><input type="color" value="${esc(p.color)}"><input type="text"><button aria-label="Delete">−</button></div>`).join('');
   showSheet('Settings', `
@@ -2084,6 +2291,8 @@ function openSettings() {
     <div class="lbl" style="margin-top:24px">Backup</div>
     <div class="two"><button class="secondary" id="exp">Download backup</button><button class="secondary" id="imp">Restore backup</button></div>
     <input type="file" id="impFile" accept="application/json,.json" style="display:none">
+    <div class="lbl" style="margin-top:24px">Start over</div>
+    <button class="danger" id="resetAll" style="margin-top:0">Reset: delete everything in the calendar…</button>
     <div class="meta" style="margin-top:14px">Prayer times are calculated for Alexandria (Egyptian General Authority of Survey method) and follow summer/winter time automatically. They may differ by a minute or two from your local mosque.</div>
     <div class="meta" style="margin-top:10px;text-align:center">App version ${APP_VERSION}</div>`, null, 'other');
   const pl = document.getElementById('pl');
@@ -2121,6 +2330,7 @@ function openSettings() {
     }).filter(p => p.name);
     withUndo('Places saved', () => { db.places = places; ui.filter = ui.filter.filter(id => places.some(p => p.id === id)); saveUI(); }, closeSheet);
   };
+  document.getElementById('resetAll').onclick = openReset;
   document.getElementById('exp').onclick = () => saveFile(`timetable-backup-${todayIso()}.json`, JSON.stringify(db, null, 2), 'application/json');
   const f = document.getElementById('impFile');
   document.getElementById('imp').onclick = () => f.click();
@@ -2507,8 +2717,9 @@ function tourSteps() {
     { sel:['#qaBtn'], title:'Quick add', text:'Type a plan in your own words, like <i>"Clinic tomorrow 9-2 check-ups"</i> or <i>"Gym every tue 9pm"</i>, and it fills everything in for you.' },
     { title:'Inside a day', text:'<b>Tap a place</b> to edit it. <b>Tick the small box</b> next to a task when it\'s done. <b>Press and hold</b> a place for notes, reminder, repeat, copy, move or delete. At the bottom, <b>Quick add</b> puts one of your usual places and times on that day.' },
     { title:'Repeating plans', text:'Changes to a repeating plan apply to <b>this day only</b> unless you choose more. When deleting, you choose exactly which days: one day, specific dates, a weekday every week or every other week, and more. You always see what will happen before anything is deleted.' },
+    { title:'Other… (type it)', text:'Lists of choices also have <b>Other…</b>: type what you want, like <i>"every other Monday in January"</i> or <i>"every day except Friday"</i>. The app shows what it understood before doing anything.' },
     { sel:['#remBtn'], title:'Reminders', text:'Set reminders for places and for each prayer, at adhan time and before the next prayer. Turn on notifications here too.' },
-    { sel:['#setBtn'], title:'Settings', text:'Rename and recolour places, change the text size, choose which day the week starts on and the hours the Week view shows, manage templates and back up your calendar.' },
+    { sel:['#setBtn'], title:'Settings', text:'Rename and recolour places, change the text size, choose which day the week starts on and the hours the Week view shows, manage templates, back up your calendar, or reset it to start over.' },
     { sel:['#undoBtn'], title:'Undo and redo', text:'Changed or deleted something by mistake? Tap ↶ to undo it, and ↷ to bring it back.' },
   ];
   if (supaOn()) st.push({ sel:['#sync'], title:'Sync your devices', text:'Sign in here to keep the same calendar on your phone, tablet and other devices, automatically.' });
