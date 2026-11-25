@@ -211,7 +211,8 @@
     border:1px solid var(--line); background:var(--bg); color:var(--text); }
   textarea { min-height:64px; resize:vertical; }
   .row { display:flex; gap:10px; } .row > * { flex:1; min-width:0; }
-  .task-row .tt { flex:none; width:112px; padding:10px 6px; }
+  .task-row .tt { flex:none; width:96px; padding:10px 8px; }
+  .timein.bad { border-color:#d93025 !important; box-shadow:0 0 0 2px rgba(217,48,37,.2); }
   .ttm { font-size:.9em; }
   .ttm2 { font-weight:600; color:var(--muted); }
   .btt { font-style:normal; display:block; opacity:.85; font-size:.95em; }
@@ -434,9 +435,17 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 
 /* ================= Helpers ================= */
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DAYS = ['Sat','Sun','Mon','Tue','Wed','Thu','Fri'];          // columns, week starts Saturday
-const COL2DOW = [6,0,1,2,3,4,5];                                     // column -> JS getDay()
-const WEEKEND = new Set([0, 6]);                                     // Sat & Fri columns
+// Week columns follow the "Week starts on" setting (default Saturday). Fri & Sat are shaded as the weekend.
+const DOW_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], WEEKEND_DOW = [5, 6];
+let DAYS, COL2DOW, WEEKEND;
+const WS = () => (ui.weekStart ?? 6);
+const colOf = dow => (dow - WS() + 7) % 7;                            // JS getDay() -> column
+function applyWeekStart() {
+  COL2DOW = [...Array(7)].map((_, i) => (WS() + i) % 7);
+  DAYS = COL2DOW.map(d => DOW_NAMES[d]);
+  WEEKEND = new Set(COL2DOW.map((d, i) => WEEKEND_DOW.includes(d) ? i : -1).filter(i => i >= 0));
+}
+applyWeekStart();
 const pad = n => String(n).padStart(2, '0');
 const iso = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
 const isoOf = dt => iso(dt.getFullYear(), dt.getMonth(), dt.getDate());
@@ -484,6 +493,29 @@ function fmtTime(t) {
   let [h, m] = t.split(':').map(Number); const ap = h >= 12 ? 'pm' : 'am'; h = h % 12 || 12;
   return m ? `${h}:${pad(m)}${ap}` : `${h}${ap}`;
 }
+// Typed times (instead of the scrolling wheel): "9", "9am", "9:30", "930", "2.30 pm", "14:00", "noon".
+// Returns "HH:MM", '' for empty, or null when it can't be understood.
+function parseTimeText(v) {
+  v = String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!v) return '';
+  if (/^(12 ?)?noon$|^midday$/.test(v)) return '12:00';
+  if (/^(12 ?)?midnight$/.test(v)) return '00:00';
+  const m = v.match(/^(\d{1,2})(?:[:.]?(\d{2}))?\s*(?:([ap])\.?\s*m?\.?)?$/); if (!m) return null;
+  const h = +m[1], mm = +(m[2] || 0); if (mm > 59) return null;
+  let t;
+  if (m[3]) { if (h < 1 || h > 12) return null; t = to24(h, mm, m[3]); }
+  else if (h > 23) return null;
+  else if (h > 12 || h === 0 || m[1].length === 2 && m[1][0] === '0') t = h * 60 + mm;   // 24-hour style
+  else t = guessHour(h, mm);
+  return `${pad(Math.floor(t / 60))}:${pad(t % 60)}`;
+}
+const timeIn = (id, v, cls = '', ph = 'e.g. 9:30am') => `<input type="text" ${id ? `id="${id}"` : ''} class="timein ${cls}" value="${esc(fmtTime(v))}" placeholder="${ph}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done">`;
+const readTime = el => el ? parseTimeText(el.value) : '';
+// Tidy a typed time when you leave the box (e.g. "930" → "9:30am"); mark it red if it isn't a time
+document.addEventListener('focusout', ev => {
+  const el = ev.target; if (!el.classList || !el.classList.contains('timein')) return;
+  const v = parseTimeText(el.value); el.classList.toggle('bad', v === null); if (v) el.value = fmtTime(v);
+}, true);
 function fmtRange(s, e) {
   if (!s) return ''; if (!e) return fmtTime(s);
   const a = fmtTime(s), b = fmtTime(e);
@@ -700,7 +732,7 @@ function renderMonth() {
   const y = cursor.getFullYear(), m = cursor.getMonth();
   document.getElementById('mName').textContent = MONTHS[m];
   document.getElementById('yName').textContent = y;
-  const offset = (new Date(y, m, 1).getDay() + 1) % 7, days = new Date(y, m + 1, 0).getDate();
+  const offset = colOf(new Date(y, m, 1).getDay()), days = new Date(y, m + 1, 0).getDate();
   const total = Math.ceil((offset + days) / 7) * 7, today = todayIso();
   let html = '';
   for (let i = 0; i < total; i++) {
@@ -715,7 +747,7 @@ function renderMonth() {
 }
 
 let H = 46;   // px per hour in week view
-function weekStart() { const d = new Date(cursor); d.setDate(d.getDate() - (d.getDay() + 1) % 7); return isoOf(d); }
+function weekStart() { const d = new Date(cursor); d.setDate(d.getDate() - colOf(d.getDay())); return isoOf(d); }
 // Put overlapping items side by side: returns id -> {lane, cols}
 function layoutLanes(list) {
   const items = list.filter(e => e.start).map(e => ({ e, s: toMin(e.start), f: toMin(e.end) > toMin(e.start) ? toMin(e.end) : toMin(e.start) + 60 }))
@@ -732,54 +764,87 @@ function layoutLanes(list) {
   return out;
 }
 const isSideways = () => window.matchMedia('(max-height:500px)').matches;
+// Week view hours come from Settings ("Day starts" / "Day ends"). If the end is earlier than the start
+// (e.g. 3am → 2am) the view runs past midnight and shows the next day's early items at the bottom.
+function hourLabel(h) { return h === 0 ? '12am (midnight)' : h === 12 ? '12pm (noon)' : h < 12 ? h + 'am' : h - 12 + 'pm'; }
+function weekWindow() {
+  const S = ui.dayStart ?? 7, E = ui.dayEnd ?? 0;
+  return [S * 60, E > S ? E * 60 : E * 60 + 1440];
+}
 function renderWeek(fitH) {
   const ws = weekStart(), dates = [...Array(7)].map((_, i) => addDays(ws, i)), today = todayIso();
-  // Start at 7am; start earlier only if an item that week begins before 7am
-  let first = 7 * 60;
-  dates.forEach(d => { first = Math.min(first, ...entriesFor(d).filter(x => x.start).map(x => toMin(x.start))); });
-  const START_H = Math.floor(first / 60), hoursShown = 24 - START_H;
+  let [W0, W1] = weekWindow();
+  // Make sure nothing that week is hidden: widen the hours if an item falls outside them
+  dates.forEach(d => entriesFor(d).filter(x => x.start).forEach(x => {
+    const st = toMin(x.start), en = toMin(x.end) > st ? toMin(x.end) : st + 60;
+    const shown = (st >= W0 && st < W1) || st + 1440 < W1;
+    if (shown) { if (st >= W0 && en > W1 && W1 < 1440) W1 = Math.min(1440, Math.ceil(en / 60) * 60); return; }
+    if (st < W0) W0 = Math.floor(st / 60) * 60; else W1 = Math.max(W1, Math.min(1440, Math.ceil(en / 60) * 60));
+  }));
+  const START_H = W0 / 60, hoursShown = (W1 - W0) / 60;
   H = fitH || Math.round((isSideways() ? 34 : 30) * (ui.ts || 1));
   const s = parse(ws), e = parse(dates[6]), same = s.getMonth() === e.getMonth();
   document.getElementById('mName').textContent = same ? MONTHS[s.getMonth()] : `${MONTHS[s.getMonth()].slice(0, 3)}–${MONTHS[e.getMonth()].slice(0, 3)}`;
   document.getElementById('yName').textContent = e.getFullYear();
-  const y = m => (m / 60 - START_H) * H;
+  const y = m => (m / 60 - START_H) * H, inWin = m => m >= W0 && m < W1;
   let head = '<div></div>', all = '<div>all-day</div>', cols = '';
   dates.forEach((date, i) => {
-    const d = parse(date), we = WEEKEND.has(i) ? ' we' : '';
+    const d = parse(date), we = WEEKEND.has(i) ? ' we' : '', next = addDays(date, 1);
     head += `<div class="${we}${date === today ? ' today' : ''}${date === pickedIso && date !== today ? ' focus' : ''}" data-date="${date}">${DAYS[i]}<b>${d.getDate()}</b></div>`;
     let a = '', c = '';
-    const list = entriesFor(date), lanes = layoutLanes(list), boxes = [];
-    list.forEach(en => {
-      const p = place(en.placeId);
-      if (!en.start) { a += `<div class="allblk" style="background:${esc(p.color)};color:${ink(p.color)}" data-date="${date}" data-id="${en.id}">${esc(p.name)}</div>`; return; }
-      const L = lanes[en.id], top = Math.max(0, y(L.s)), h = Math.max(Math.min(22, H - 2), y(L.f) - top - 2);
-      const left = L.lane / L.cols * 100, width = 100 / L.cols;
+    const own = entriesFor(date);
+    own.filter(en => !en.start).forEach(en => { const p = place(en.placeId); a += `<div class="allblk" style="background:${esc(p.color)};color:${ink(p.color)}" data-date="${date}" data-id="${en.id}">${esc(p.name)}</div>`; });
+    // Timed items in this column: this day's, plus the next day's early items when the view runs past midnight
+    const items = own.filter(en => en.start && inWin(toMin(en.start))).map(en => ({ en, date, off: 0 }));
+    if (W1 > 1440) entriesFor(next).filter(en => en.start && toMin(en.start) < W0 && toMin(en.start) + 1440 < W1).forEach(en => items.push({ en, date: next, off: 1440 }));
+    items.forEach(it => { const st = toMin(it.en.start); it.s = st + it.off; it.f = (toMin(it.en.end) > st ? toMin(it.en.end) : st + 60) + it.off; });
+    items.sort((p, q) => p.s - q.s || q.f - p.f);
+    let laneEnds = [], cluster = [], clusterEnd = -1;
+    const closeC = () => { cluster.forEach(it => it.cols = laneEnds.length); cluster = []; laneEnds = []; };
+    items.forEach(it => {
+      if (it.s >= clusterEnd) closeC();
+      let lane = laneEnds.findIndex(end => end <= it.s);
+      if (lane < 0) { lane = laneEnds.length; laneEnds.push(it.f); } else laneEnds[lane] = it.f;
+      it.lane = lane; cluster.push(it); clusterEnd = Math.max(clusterEnd, it.f);
+    });
+    closeC();
+    const boxes = [];
+    items.forEach(it => {
+      const en = it.en, p = place(en.placeId);
+      const top = Math.max(0, y(it.s)), h = Math.max(Math.min(22, H - 2), Math.min(y(W1), y(it.f)) - top - 2);
+      const left = it.lane / it.cols * 100, width = 100 / it.cols, alt = it.cols > 1 && it.lane % 2;
       boxes.push({ top, bot: top + h, left, width });
-      const dn = doneSet(en, date);
+      const dn = doneSet(en, it.date);
       const tasks = en.tasks.map((t, ti) => t ? `<span class="bt${dn.has(ti) ? ' done' : ''}">${taskT(en, ti) ? `<i class="btt">${fmtTime(taskT(en, ti))}</i>` : ''}${esc(t)}</span>` : '').join('');
-      c += `<div class="blk${L.cols > 1 ? ' ov' : ''}${L.cols > 1 && L.lane % 2 ? ' alt' : ''}" style="top:${top}px;height:${h}px;left:calc(${left}% + 1px);width:calc(${width}% - 2px);background:${esc(p.color)};color:${ink(p.color, L.cols > 1 && L.lane % 2 ? .82 : 0)}" data-date="${date}" data-id="${en.id}"><b>${esc(p.name)}</b><span class="tm">${fmtRange(en.start, en.end)}</span>${tasks}</div>`;
+      c += `<div class="blk${it.cols > 1 ? ' ov' : ''}${alt ? ' alt' : ''}" style="top:${top}px;height:${h}px;left:calc(${left}% + 1px);width:calc(${width}% - 2px);background:${esc(p.color)};color:${ink(p.color, alt ? .82 : 0)}" data-date="${it.date}" data-id="${en.id}"><b>${esc(p.name)}</b><span class="tm">${fmtRange(en.start, en.end)}</span>${tasks}</div>`;
     });
-    const pt = prayerTimes(date);
-    PRAYERS.forEach(([k, name]) => {
-      if (k === 'sunrise') return;
-      const py = y(toMin(pt[k])); if (py < 0) return;
-      const hit = boxes.filter(b => py >= b.top && py <= b.bot);
+    const prLine = m => {
+      if (!inWin(m)) return; const py = y(m);
       c += `<div class="pr" style="top:${py}px"></div>`;
-      hit.forEach(b => { c += `<div class="pr hit" style="top:${py}px;left:${b.left}%;width:${b.width}%"></div>`; });
-
+      boxes.filter(b => py >= b.top && py <= b.bot).forEach(b => { c += `<div class="pr hit" style="top:${py}px;left:${b.left}%;width:${b.width}%"></div>`; });
+    };
+    const pt = prayerTimes(date), ptN = W1 > 1440 ? prayerTimes(next) : null;
+    PRAYERS.forEach(([k]) => {
+      if (k === 'sunrise') return;
+      prLine(toMin(pt[k]));
+      if (ptN && toMin(ptN[k]) < W0) prLine(toMin(ptN[k]) + 1440);
     });
-    if (date === today) { const n = new Date(); c += `<div class="now" style="top:${y(n.getHours() * 60 + n.getMinutes())}px"></div>`; }
+    const n = new Date(), nm = n.getHours() * 60 + n.getMinutes();
+    if (date === today && inWin(nm)) c += `<div class="now" style="top:${y(nm)}px"></div>`;
+    if (next === today && nm < W0 && inWin(nm + 1440)) c += `<div class="now" style="top:${y(nm + 1440)}px"></div>`;
     all += `<div>${a}</div>`;
-    cols += `<div class="wk-col${we}" data-date="${date}" style="height:${(24 - START_H) * H}px">${c}</div>`;
+    cols += `<div class="wk-col${we}" data-date="${date}" style="height:${hoursShown * H}px">${c}</div>`;
   });
-  const refDate = dates.includes(today) ? today : dates[0], refPt = prayerTimes(refDate);
+  const refDate = dates.includes(today) ? today : dates[0], refPt = prayerTimes(refDate), refN = prayerTimes(addDays(refDate, 1));
   let gutter = '';
   PRAYERS.forEach(([k, name]) => {
     if (k === 'sunrise') return;
-    const py = y(toMin(refPt[k])); if (py < 0) return;
-    gutter += `<div class="gpl" style="top:${py}px"><b>${name}${prBell(k) ? '🔔' : ''}</b>${fmtTime(refPt[k])}</div>`;
+    [[toMin(refPt[k]), refPt[k]], ...(W1 > 1440 && toMin(refN[k]) < W0 ? [[toMin(refN[k]) + 1440, refN[k]]] : [])].forEach(([m, t]) => {
+      if (!inWin(m)) return;
+      gutter += `<div class="gpl" style="top:${y(m)}px"><b>${name}${prBell(k) ? '🔔' : ''}</b>${fmtTime(t)}</div>`;
+    });
   });
-  let hours = ''; for (let h = START_H; h < 24; h++) hours += `<div>${H < 22 && h % 2 ? '' : h === 12 ? '12pm' : h > 12 ? h - 12 + 'pm' : h + 'am'}</div>`;
+  let hours = ''; for (let k = START_H; k < START_H + hoursShown; k++) { const h = k % 24; hours += `<div>${H < 22 && h % 2 ? '' : h === 12 ? '12pm' : h === 0 ? '12am' : h > 12 ? h - 12 + 'pm' : h + 'am'}</div>`; }
   main.innerHTML = `<div class="week" style="--h:${H}px"><div class="wk-head">${head}</div><div class="wk-all">${all}</div>
     <div class="wk-body" id="wkBody"><div class="wk-grid"><div class="wk-hours">${hours}${gutter}</div>${cols}</div></div></div>`;
   const body = document.getElementById('wkBody');
@@ -912,7 +977,7 @@ function parseQuick(text, base) {
   take(new RegExp(`\\b${monTxt}\\s+(\\d{1,2})\\b`, 'i'), m => { const t = parse(todayIso()); let d = new Date(t.getFullYear(), MON_N[m[1].toLowerCase()], +m[2]); if (isoOf(d) < addDays(todayIso(), -60)) d.setFullYear(d.getFullYear() + 1); o.date = isoOf(d); });
   take(/\b(?:on\s+)?(next\s+)?(sat|sun|mon|tue|wed|thu|fri)[a-z]*\b/i, m => {
     const want = DOW_N[m[2].toLowerCase()]; let d = todayIso(); while (parse(d).getDay() !== want) d = addDays(d, 1);
-    if (m[1]) { const t = parse(todayIso()); t.setDate(t.getDate() - (t.getDay() + 1) % 7); const nextWk = addDays(isoOf(t), 7); while (d < nextWk) d = addDays(d, 7); }
+    if (m[1]) { const t = parse(todayIso()); t.setDate(t.getDate() - colOf(t.getDay())); const nextWk = addDays(isoOf(t), 7); while (d < nextWk) d = addDays(d, 7); }
     o.date = d;
   });
   const T = '(\\d{1,2})(?:[:.](\\d{2}))?\\s*(am|pm|a\\.?m\\.?|p\\.?m\\.?)?';
@@ -1087,8 +1152,8 @@ function openEditor(date, id) {
     <select id="fPlace">${db.places.map(p => `<option value="${esc(p.id)}" ${p.id === e.placeId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}<option value="__new">+ New place…</option></select>
     <div id="fNewPlace" style="display:none;margin-top:8px" class="place-row"><input type="color" id="fNewColor" value="#e0533d"><input type="text" id="fNewName" placeholder="New place name"></div>
     <div class="row">
-      <div><label>Start</label><input type="time" id="fStart" value="${esc(e.start)}"></div>
-      <div><label>End</label><input type="time" id="fEnd" value="${esc(e.end)}"></div>
+      <div><label>Start</label>${timeIn('fStart', e.start)}</div>
+      <div><label>End</label>${timeIn('fEnd', e.end, '', 'e.g. 2pm')}</div>
     </div>
     <label>Tasks <span style="text-transform:none;letter-spacing:0">· time is optional</span></label><div id="fTasks"></div>
     <button class="add-small" id="fAddTask">+ Add task</button>
@@ -1119,8 +1184,8 @@ function openEditor(date, id) {
   const tasksEl = document.getElementById('fTasks');
   const addTask = (v = '', tm = '') => {
     const row = document.createElement('div'); row.className = 'task-row';
-    row.innerHTML = `<input type="text" class="tx" placeholder="e.g. Lecture notes"><input type="time" class="tt" aria-label="Task time (optional)"><button aria-label="Remove">−</button>`;
-    row.querySelector('.tx').value = v; row.querySelector('.tt').value = tm; row.querySelector('button').onclick = () => row.remove();
+    row.innerHTML = `<input type="text" class="tx" placeholder="e.g. Lecture notes">${timeIn('', '', 'tt', 'Time')}<button aria-label="Remove">−</button>`;
+    row.querySelector('.tx').value = v; row.querySelector('.tt').value = fmtTime(tm); row.querySelector('button').onclick = () => row.remove();
     tasksEl.appendChild(row); return row;
   };
   (e.tasks.length ? e.tasks : ['']).forEach((t, i) => addTask(t, taskT(e, i)));
@@ -1149,8 +1214,8 @@ function openEditor(date, id) {
   const readForm = () => {
     const f = freq.value;
     return {
-      placeId: sel.value, start: document.getElementById('fStart').value, end: document.getElementById('fEnd').value,
-      ...(() => { const rows = [...tasksEl.querySelectorAll('.task-row')].map(rw => [rw.querySelector('.tx').value.trim(), rw.querySelector('.tt').value]).filter(([t]) => t);
+      placeId: sel.value, start: readTime(document.getElementById('fStart')) || '', end: readTime(document.getElementById('fEnd')) || '',
+      ...(() => { const rows = [...tasksEl.querySelectorAll('.task-row')].map(rw => [rw.querySelector('.tx').value.trim(), readTime(rw.querySelector('.tt')) || '']).filter(([t]) => t);
         return { tasks: rows.map(([t]) => t), taskTimes: rows.map(([, tm]) => tm) }; })(),
       note: document.getElementById('fNote').value.trim(), remind: readPicker('fRemind'),
       repeat: f === 'none' ? null : { freq:f, until:document.getElementById('fUntil').value,
@@ -1165,6 +1230,8 @@ function openEditor(date, id) {
   const resetClash = () => { clashOk = false; document.getElementById('fWarn').style.display = 'none'; document.getElementById('fSave').textContent = 'Save'; };
   ['fStart', 'fEnd'].forEach(id => document.getElementById(id).addEventListener('input', resetClash));
   document.getElementById('fSave').onclick = () => {
+    const badT = [...document.querySelectorAll('#sheet .timein')].find(el => parseTimeText(el.value) === null);
+    if (badT) { badT.classList.add('bad'); badT.focus(); return toast('Type the time like 9am, 9:30 or 14:00'); }
     if (sel.value === '__new') {
       const name = document.getElementById('fNewName').value.trim();
       if (!name) return toast('Type a name for the new place');
@@ -1394,6 +1461,9 @@ function openTransfer(from, e, kind, backTo) {
       (clash.length ? `<div class="warn" style="margin-top:6px">⚠️ Overlaps with ${clash.map(x => esc(place(x.placeId).name) + ' ' + fmtRange(x.start, x.end)).join(', ')}</div>` : '');
     go.disabled = false; go.textContent = `Yes, ${verb.toLowerCase()} to ${shortDate(to)}`;
   };
+  // iPhone/iPad don't always send "input" for date boxes, so listen to every kind of change and also check regularly
+  inp.onchange = inp.onblur = inp.oninput;
+  let lastV = ''; const poll = setInterval(() => { if (!document.body.contains(inp)) return clearInterval(poll); if (inp.value !== lastV) { lastV = inp.value; inp.oninput(); } }, 300);
   document.getElementById('tCancel').onclick = goBack;
   go.onclick = () => {
     const to = inp.value; if (!to || to === from) return;
@@ -1487,7 +1557,7 @@ function openTodo() {
 
 /* ================= Share ================= */
 function shareRange(kind) {
-  const t = todayIso(), ws = (() => { const d = parse(t); d.setDate(d.getDate() - (d.getDay() + 1) % 7); return isoOf(d); })();
+  const t = todayIso(), ws = (() => { const d = parse(t); d.setDate(d.getDate() - colOf(d.getDay())); return isoOf(d); })();
   if (kind === 'thisweek') return [ws, addDays(ws, 6)];
   if (kind === 'nextweek') return [addDays(ws, 7), addDays(ws, 13)];
   const d = parse(t), m = kind === 'nextmonth' ? d.getMonth() + 1 : d.getMonth();
@@ -1556,7 +1626,7 @@ function openShare() {
     return { from, to, places: on.length === db.places.length ? [] : on, tasks: document.getElementById('sTasks').checked, notes: document.getElementById('sNotes').checked };
   };
   const upd = () => { document.getElementById('sPrev').textContent = shareText(cur()).replace(/\*/g, ''); };
-  ['sRange', 'sFrom', 'sTo', 'sTasks', 'sNotes'].forEach(id => document.getElementById(id).addEventListener('input', upd));
+  ['sRange', 'sFrom', 'sTo', 'sTasks', 'sNotes'].forEach(id => ['input', 'change', 'blur'].forEach(t => document.getElementById(id).addEventListener(t, upd)));
   document.getElementById('sRange').addEventListener('change', upd);
   document.getElementById('sPlaces').onclick = ev => { const b = ev.target.closest('button'); if (b) { b.classList.toggle('on'); upd(); } };
   const t = todayIso(); document.getElementById('sFrom').value = t; document.getElementById('sTo').value = addDays(t, 6);
@@ -1763,6 +1833,12 @@ function openSettings() {
     ${supaOn() ? `<div class="lbl" style="margin-top:24px">Account & sync</div><button class="secondary" id="acBtn">${supa.session ? '☁︎ ' + esc(supa.session.user.email) : 'Sign in to sync your devices'}</button>` : ''}
     <div class="lbl" style="margin-top:24px">Text size in the calendar</div>
     <div class="seg" id="tsSeg" style="width:100%">${[[0.85,'Small'],[1,'Medium'],[1.2,'Large'],[1.45,'Extra large']].map(([v, l]) => `<button data-ts="${v}" class="${(ui.ts || 1) == v ? 'on' : ''}" style="flex:1">${l}</button>`).join('')}</div>
+    <div class="lbl" style="margin-top:24px">Calendar</div>
+    <label>Week starts on</label>
+    <select id="sWeekStart">${[6, 0, 1, 2, 3, 4, 5].map(d => `<option value="${d}" ${WS() === d ? 'selected' : ''}>${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d]}</option>`).join('')}</select>
+    <div class="row"><div><label>Week view starts at</label><select id="sDayStart">${[...Array(24)].map((_, h) => `<option value="${h}" ${(ui.dayStart ?? 7) === h ? 'selected' : ''}>${hourLabel(h)}</option>`).join('')}</select></div>
+      <div><label>Ends at</label><select id="sDayEnd"></select></div></div>
+    <div class="meta" id="sDayNote" style="margin-top:6px"></div>
     <div class="lbl" style="margin-top:24px">Templates</div>
     <div id="tplList">${db.templates.length ? db.templates.map(t => `<div class="todo"><span style="flex:1;padding:10px 0">${esc(t.name)} <small class="meta">· ${t.items.length} item${t.items.length > 1 ? 's' : ''}</small></span><button class="mini x" data-del="${t.id}" aria-label="Delete">✕</button></div>`).join('') : '<div class="meta">None yet. Save one from any day.</div>'}</div>
     <div class="lbl" style="margin-top:24px">Backup</div>
@@ -1784,6 +1860,17 @@ function openSettings() {
     const r = pl.lastElementChild; wire(r); r.querySelector('input[type=text]').focus();
   };
   const acB = document.getElementById('acBtn'); if (acB) acB.onclick = openAccount;
+  const dS = document.getElementById('sDayStart'), dE = document.getElementById('sDayEnd'), dN = document.getElementById('sDayNote');
+  const fillEnd = () => {   // End options run from the hour after the start round to the start again (next day)
+    const st = +dS.value, cur = ui.dayEnd ?? 0;
+    dE.innerHTML = [...Array(24)].map((_, i) => (st + 1 + i) % 24).map(h => `<option value="${h}" ${h === cur ? 'selected' : ''}>${hourLabel(h)}${h !== 0 && h <= st ? ' (next day)' : ''}</option>`).join('');
+    const en = +dE.value, span = ((en - st + 23) % 24) + 1;
+    dN.textContent = `The week view shows ${hourLabel(st)} to ${hourLabel(en)}${en !== 0 && en <= st ? ' the next morning' : ''} (${span} hours). Items outside these hours still show: the view stretches to include them.`;
+  };
+  fillEnd();
+  dS.onchange = () => { ui.dayStart = +dS.value; fillEnd(); ui.dayEnd = +dE.value; saveUI(); render(); };
+  dE.onchange = () => { ui.dayEnd = +dE.value; fillEnd(); saveUI(); render(); };
+  document.getElementById('sWeekStart').onchange = ev => { ui.weekStart = +ev.target.value; saveUI(); applyWeekStart(); render(); toast('Weeks now start on ' + ev.target.selectedOptions[0].textContent); };
   document.getElementById('tsSeg').onclick = ev => { const b = ev.target.closest('button'); if (!b) return; ui.ts = +b.dataset.ts; saveUI(); applyTextSize(); document.querySelectorAll('#tsSeg button').forEach(x => x.classList.toggle('on', x === b)); render(); };
   document.querySelectorAll('#tplList [data-del]').forEach(b => b.onclick = () => withUndo('Template deleted', () => { db.templates = db.templates.filter(t => t.id !== b.dataset.del); }, openSettings));
   document.getElementById('plSave').onclick = () => {
@@ -2179,7 +2266,7 @@ function tourSteps() {
     { sel:['#qaBtn'], title:'Quick add', text:'Type a plan in your own words, like <i>"Clinic tomorrow 9-2 check-ups"</i> or <i>"Gym every tue 9pm"</i>, and it fills everything in for you.' },
     { title:'Inside a day', text:'<b>Tap a place</b> to edit it. <b>Tick the small box</b> next to a task when it\'s done. <b>Press and hold</b> a place for notes, reminder, repeat, copy, move or delete.' },
     { sel:['#remBtn'], title:'Reminders', text:'Set reminders for places and for each prayer, at adhan time and before the next prayer. Turn on notifications here too.' },
-    { sel:['#setBtn'], title:'Settings', text:'Rename and recolour places, change the text size, manage templates and back up your calendar.' },
+    { sel:['#setBtn'], title:'Settings', text:'Rename and recolour places, change the text size, choose which day the week starts on and the hours the Week view shows, manage templates and back up your calendar.' },
     { sel:['#undoBtn'], title:'Undo and redo', text:'Changed or deleted something by mistake? Tap ↶ to undo it, and ↷ to bring it back.' },
   ];
   if (supaOn()) st.push({ sel:['#sync'], title:'Sync your devices', text:'Sign in here to keep the same calendar on your phone, tablet and other devices, automatically.' });
@@ -2269,7 +2356,7 @@ let lastDay = todayIso();
 // unless you were looking at a different week/month on purpose.
 function followToday() {
   const t = todayIso(); if (t === lastDay) return;
-  const wsOf = iso => { const d = parse(iso); d.setDate(d.getDate() - (d.getDay() + 1) % 7); return isoOf(d); };
+  const wsOf = iso => { const d = parse(iso); d.setDate(d.getDate() - colOf(d.getDay())); return isoOf(d); };
   const wasCurrent = ui.mode === 'week' ? wsOf(lastDay) === weekStart()
     : parse(lastDay).getMonth() === cursor.getMonth() && parse(lastDay).getFullYear() === cursor.getFullYear();
   lastDay = t;
