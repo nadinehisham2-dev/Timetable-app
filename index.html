@@ -293,6 +293,8 @@
     .wcard label { color:#b9ccc8; } .wcard input { background:rgba(0,0,0,.35); color:#fff; border-color:rgba(255,255,255,.15); }
     .wgo { background:#2f8f7d; } .wnote { background:rgba(255,255,255,.07); color:#c7d8d4; } .wnote b { color:#fff; } .wskip { color:#7fd6c4; }
   }
+  .wsave { font-size:12.5px; color:#4a6660; margin:10px 0 0; text-align:center; line-height:1.4; }
+  @media (prefers-color-scheme: dark) { .wsave { color:#a9bfba; } }
   .wforgot { background:none; border:none; color:#14463d; font-size:14px; font-weight:600; padding:8px 0 0; cursor:pointer; }
   .wmsg.ok { background:#e3f4ee; color:#14463d; }
   @media (prefers-color-scheme: dark) { .wforgot { color:#7fd6c4; } .wmsg.ok { background:rgba(127,214,196,.15); color:#bfeee3; } }
@@ -363,11 +365,14 @@
     <div class="wbrand"><img src="icons/icon-192.png" alt=""><div><h1 id="wTitle">Timetable</h1><p>Your places, times and tasks, month by month</p></div></div>
     <p class="wlead">Create a free account to keep your calendar <b>automatically in sync</b> on your iPhone, iPad and any other device you sign in on.</p>
     <div class="wtabs"><button id="wTabUp" class="on">Create account</button><button id="wTabIn">Sign in</button></div>
-    <label for="wEmail">Email</label><input type="email" id="wEmail" autocomplete="username" inputmode="email" placeholder="you@example.com">
-    <label for="wPw">Password</label><input type="password" id="wPw" autocomplete="new-password" placeholder="At least 6 characters">
-    <button class="wforgot" id="wForgot" style="display:none">Forgot password?</button>
+    <form id="wForm" method="post" action="#" autocomplete="on" novalidate>
+    <label for="wEmail">Email</label><input type="email" id="wEmail" name="email" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false" placeholder="you@example.com">
+    <label for="wPw">Password</label><input type="password" id="wPw" name="password" autocomplete="new-password" placeholder="At least 6 characters">
+    <button type="button" class="wforgot" id="wForgot" style="display:none">Forgot password?</button>
     <div class="wmsg" id="wMsg"></div>
-    <button class="wgo" id="wGo">Create account</button>
+    <button type="submit" class="wgo" id="wGo">Create account</button>
+    <p class="wsave">🔑 Your iPhone or iPad will offer to <b>save your password</b>, so next time it fills in automatically.</p>
+    </form>
     <div class="wnote"><span aria-hidden="true">🔒</span><span>Your email is only used as your sign-in name. <b>The app can't read your emails or access anything in your email account</b>, and only you can see your timetable.</span></div>
     <button class="wskip" id="wSkip">Continue without an account</button>
     <p class="wskipnote">Your calendar will be saved only on this device. You can sign in later.</p>
@@ -1973,7 +1978,9 @@ function showWelcome() {
   document.getElementById('wForgot').onclick = () => sendReset(document.getElementById('wEmail').value.trim(), t => { msgEl.style.display = 'block'; msgEl.className = 'wmsg ok'; msgEl.textContent = t; }, t => { msgEl.className = 'wmsg'; msg(t); });
   tabUp.onclick = () => setMode('up'); tabIn.onclick = () => setMode('in');
   const close = () => { w.classList.remove('in'); setTimeout(() => { w.classList.remove('show'); maybeStartTour(); }, 350); };
-  go.onclick = async () => {
+  document.getElementById('wForm').onsubmit = ev => { ev.preventDefault(); go.click(); };
+  go.onclick = async (ev) => {
+    if (ev && ev.preventDefault) ev.preventDefault();
     const email = document.getElementById('wEmail').value.trim(), password = pw.value;
     if (!/^\S+@\S+\.\S+$/.test(email)) return msg('Please type a valid email address.');
     if (password.length < 6) return msg('Your password needs at least 6 characters.');
@@ -1983,6 +1990,7 @@ function showWelcome() {
         const j = await supaAuth('signup', { email, password });
         if (!keepSession(j)) { go.disabled = false; setMode('in'); return msg('Account created. Check your email for a confirmation link, then sign in here.'); }
       } else keepSession(await supaAuth('token?grant_type=password', { email, password }));
+      rememberPassword(email, password);
       close(); toast(mode === 'up' ? 'Welcome! Your calendar now syncs ☁︎' : 'Signed in · syncing ☁︎'); supaInit();
     } catch (e) {
       go.disabled = false; go.textContent = mode === 'up' ? 'Create account' : 'Sign in';
@@ -1992,7 +2000,6 @@ function showWelcome() {
         : /fetch|network/i.test(t) ? "Couldn't connect. Check your internet and try again." : t);
     }
   };
-  [document.getElementById('wEmail'), pw].forEach(i => i.addEventListener('keydown', ev => { if (ev.key === 'Enter') go.click(); }));
   document.getElementById('wSkip').onclick = () => { try { sessionStorage.setItem('tt-welcome-skip', '1'); } catch (e) {} close(); };
   w.classList.add('show'); requestAnimationFrame(() => requestAnimationFrame(() => w.classList.add('in')));
 }
@@ -2012,25 +2019,35 @@ function openAccount() {
     return;
   }
   showSheet('Sign in to sync', `<div class="meta">Use the same email and password on your iPad and iPhone to see the same timetable on both.</div>
-    <label>Email</label><input type="email" id="acEmail" autocomplete="username" inputmode="email">
-    <label>Password</label><input type="password" id="acPw" autocomplete="current-password" placeholder="At least 6 characters">
-    <button class="add-small" id="acForgot">Forgot password?</button>
+    <form id="acForm" method="post" action="#" autocomplete="on" novalidate>
+    <label>Email</label><input type="email" id="acEmail" name="email" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false">
+    <label>Password</label><input type="password" id="acPw" name="password" autocomplete="current-password" placeholder="At least 6 characters">
+    <button type="button" class="add-small" id="acForgot">Forgot password?</button>
     <div class="box warnbox" id="acMsg" style="display:none"></div>
     <div style="height:12px"></div>
-    <div class="two"><button class="primary" id="acIn">Sign in</button><button class="secondary" id="acUp" style="margin-top:0">Create account</button></div>`, null, 'other');
+    <div class="two"><button type="submit" class="primary" id="acIn">Sign in</button><button type="button" class="secondary" id="acUp" style="margin-top:0">Create account</button></div>
+    <div class="meta" style="margin-top:8px">🔑 Your device will offer to save your password so it fills in automatically next time.</div>
+    </form>`, null, 'other');
+  document.getElementById('acForm').onsubmit = ev => { ev.preventDefault(); document.getElementById('acIn').click(); };
   const msg = t => { const m = document.getElementById('acMsg'); m.style.display = ''; m.textContent = t; };
   const creds = () => ({ email: document.getElementById('acEmail').value.trim(), password: document.getElementById('acPw').value });
   const done = () => { closeSheet(); toast('Signed in · syncing'); supaInit(); };
   document.getElementById('acForgot').onclick = () => sendReset(document.getElementById('acEmail').value.trim(), msg, msg);
   document.getElementById('acIn').onclick = async () => {
     const c = creds(); if (!c.email || !c.password) return msg('Type your email and password.');
-    try { keepSession(await supaAuth('token?grant_type=password', c)); done(); } catch (e) { msg(e.message === 'Invalid login credentials' ? 'Wrong email or password. New here? Tap "Create account".' : e.message); }
+    try { keepSession(await supaAuth('token?grant_type=password', c)); rememberPassword(c.email, c.password); done(); } catch (e) { msg(e.message === 'Invalid login credentials' ? 'Wrong email or password. New here? Tap "Create account".' : e.message); }
   };
   document.getElementById('acUp').onclick = async () => {
     const c = creds(); if (!c.email || c.password.length < 6) return msg('Type your email and a password of at least 6 characters.');
-    try { const j = await supaAuth('signup', c); if (keepSession(j)) done(); else msg('Account created. Check your email for a confirmation link, then come back and tap Sign in.'); }
+    try { const j = await supaAuth('signup', c); if (keepSession(j)) { rememberPassword(c.email, c.password); done(); } else msg('Account created. Check your email for a confirmation link, then come back and tap Sign in.'); }
     catch (e) { msg(e.message); }
   };
+}
+
+/* ================= Saving passwords ================= */
+// Safari (iPhone/iPad/Mac) offers to save from the sign-in form itself; Chrome/Android also use this:
+function rememberPassword(email, password) {
+  try { if (window.PasswordCredential && navigator.credentials) navigator.credentials.store(new PasswordCredential({ id: email, password, name: email })).catch(() => {}); } catch (e) {}
 }
 
 /* ================= Forgot password ================= */
@@ -2056,10 +2073,12 @@ async function handleRecovery() {
     keepSession({ access_token:h.get('access_token'), refresh_token:h.get('refresh_token'), expires_in:+h.get('expires_in') || 3600, user: await res.json() });
   } catch (e) { toast('This reset link has expired. Please ask for a new one.', null, 8000); return false; }
   showSheet('Set a new password', `<div class="meta">Signed in as <b>${esc(supa.session.user.email)}</b>. Choose a new password for your account.</div>
-    <label>New password</label><input type="password" id="npw1" autocomplete="new-password" placeholder="At least 6 characters">
+    <form id="npwForm" method="post" action="#" autocomplete="on" onsubmit="return false">
+    <input type="email" name="email" autocomplete="username" value="${esc(supa.session.user.email)}" readonly style="position:absolute;opacity:0;height:0;width:0;pointer-events:none" tabindex="-1" aria-hidden="true">
+    <label>New password</label><input type="password" id="npw1" name="password" autocomplete="new-password" placeholder="At least 6 characters">
     <label>Type it again</label><input type="password" id="npw2" autocomplete="new-password">
     <div class="box warnbox" id="npwMsg" style="display:none"></div>
-    <div style="height:12px"></div><button class="primary" id="npwGo">Save new password</button>`, null, 'other');
+    <div style="height:12px"></div><button type="submit" class="primary" id="npwGo">Save new password</button></form>`, null, 'other');
   document.getElementById('npwGo').onclick = async () => {
     const a = document.getElementById('npw1').value, b = document.getElementById('npw2').value, m = document.getElementById('npwMsg');
     const say = t => { m.style.display = ''; m.textContent = t; };
@@ -2069,7 +2088,7 @@ async function handleRecovery() {
       const res = await fetch(`${SUPA_URL}/auth/v1/user`, { method:'PUT', headers:{ apikey:SUPA_KEY, Authorization:'Bearer ' + supa.session.access_token, 'Content-Type':'application/json' }, body:JSON.stringify({ password:a }) });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.msg || j.message || 'Could not save the password');
-      closeSheet(); toast('New password saved ✓ You are signed in.'); supaInit();
+      rememberPassword(supa.session.user.email, a); closeSheet(); toast('New password saved ✓ You are signed in.'); supaInit();
     } catch (e) { say(e.message); }
   };
   return true;
