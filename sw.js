@@ -1,5 +1,5 @@
 // Offline support: keep the app's files on the device and refresh them in the background.
-const CACHE = 'timetable-v7';
+const CACHE = 'timetable-v8';
 const FILES = ['./', './index.html', './manifest.json', './img/welcome.webp', './guide.html', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).catch(() => {})); self.skipWaiting(); });
 self.addEventListener('activate', e => {
@@ -8,7 +8,8 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   // Network first (always newest version when online), saved copy when offline
-  e.respondWith(fetch(e.request).then(res => {
+  // cache:'no-cache' skips the browser's 10-minute copy so changes show up on the next open
+  e.respondWith(fetch(e.request, { cache: 'no-cache' }).then(res => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
     return res;
   }).catch(() => caches.match(e.request).then(hit => hit || caches.match('./index.html'))));
