@@ -211,7 +211,18 @@
     border:1px solid var(--line); background:var(--bg); color:var(--text); }
   textarea { min-height:64px; resize:vertical; }
   .row { display:flex; gap:10px; } .row > * { flex:1; min-width:0; }
-  .task-row .tt { flex:none; width:96px; padding:10px 8px; }
+  .timein { display:flex; align-items:center; gap:1px; min-height:44px; padding:0 4px 0 8px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--text); }
+  .timein:focus-within { border-color:var(--text); }
+  .timein input { width:2.1em; flex:none; padding:8px 0; border:none; border-radius:6px; background:transparent; text-align:center; font-size:17px; font-variant-numeric:tabular-nums; }
+  .timein input:focus { outline:none; background:var(--soft); }
+  .timein input::placeholder { color:var(--muted); opacity:.75; }
+  .timein .tc { font-size:17px; font-weight:600; color:var(--muted); }
+  .timein .ap { display:flex; margin-left:auto; background:var(--soft); border-radius:8px; padding:2px; }
+  .timein .ap button { border:none; background:none; color:var(--muted); font:inherit; font-size:12px; font-weight:600; padding:6px 7px; border-radius:6px; cursor:pointer; }
+  .timein .ap button.on { background:var(--bg); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.15); }
+  .task-row .tt { flex:none; padding-left:4px; }
+  .task-row .tt input { width:1.9em; font-size:16px; }
+  .task-row .tt .ap button { padding:6px 5px; font-size:11px; }
   .timein.bad { border-color:#d93025 !important; box-shadow:0 0 0 2px rgba(217,48,37,.2); }
   .ttm { font-size:.9em; }
   .ttm2 { font-weight:600; color:var(--muted); }
@@ -509,12 +520,45 @@ function parseTimeText(v) {
   else t = guessHour(h, mm);
   return `${pad(Math.floor(t / 60))}:${pad(t % 60)}`;
 }
-const timeIn = (id, v, cls = '', ph = 'e.g. 9:30am') => `<input type="text" ${id ? `id="${id}"` : ''} class="timein ${cls}" value="${esc(fmtTime(v))}" placeholder="${ph}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done">`;
-const readTime = el => el ? parseTimeText(el.value) : '';
-// Tidy a typed time when you leave the box (e.g. "930" → "9:30am"); mark it red if it isn't a time
+// Time box: [00]:[00] [AM|PM]. Tap the hour or minutes and type; tap AM or PM.
+function timeParts(v) { if (!v) return ['', '', '']; let [h, m] = v.split(':').map(Number); const ap = h >= 12 ? 'pm' : 'am'; return [pad(h % 12 || 12), pad(m), ap]; }
+const timeIn = (id, v, cls = '') => { const [h, m, ap] = timeParts(v);
+  return `<div class="timein ${cls}" ${id ? `id="${id}"` : ''} role="group" aria-label="Time"><input class="th" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="00" value="${h}" aria-label="Hour" autocomplete="off"><span class="tc">:</span><input class="tmn" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="00" value="${m}" aria-label="Minutes" autocomplete="off"><span class="ap"><button type="button" data-ap="am" class="${ap === 'am' ? 'on' : ''}">AM</button><button type="button" data-ap="pm" class="${ap === 'pm' ? 'on' : ''}">PM</button></span></div>`; };
+function setTime(el, v) { const [h, m, ap] = timeParts(v); el.querySelector('.th').value = h; el.querySelector('.tmn').value = m; el.querySelectorAll('.ap button').forEach(b => b.classList.toggle('on', b.dataset.ap === ap)); el.classList.remove('bad'); }
+// "HH:MM", '' when left empty, or null when it isn't a real time
+function readTime(el) {
+  if (!el) return '';
+  const hs = el.querySelector('.th').value.trim(), ms = el.querySelector('.tmn').value.trim();
+  if (!hs && !ms) return '';
+  const h = +hs, m = +(ms || 0), on = el.querySelector('.ap .on');
+  if (!hs || !/^\d+$/.test(hs) || !/^\d*$/.test(ms) || h < 1 || h > 12 || m > 59) return null;
+  return `${pad(h % 12 + (on && on.dataset.ap === 'pm' || !on && guessHour(h, m) >= 720 ? 12 : 0))}:${pad(m)}`;
+}
+const timeBox = t => t && t.closest && t.closest('.timein');
+const pickAp = (box, ap) => box.querySelectorAll('.ap button').forEach(b => b.classList.toggle('on', b.dataset.ap === ap));
+document.addEventListener('input', ev => {
+  const box = timeBox(ev.target); if (!box || ev.target.tagName !== 'INPUT') return;
+  const inp = ev.target; inp.value = inp.value.replace(/\D/g, '').slice(0, 2); box.classList.remove('bad');
+  if (inp.classList.contains('th')) {
+    let h = +inp.value;
+    if (inp.value.length === 2 && h > 12 && h < 24) { inp.value = String(h - 12); pickAp(box, 'pm'); }           // 14 → 2 PM
+    else if (inp.value === '00') { inp.value = '12'; pickAp(box, 'am'); }
+    else if (inp.value && !box.dataset.apSet && h >= 1 && h <= 12) pickAp(box, guessHour(h, 0) >= 720 ? 'pm' : 'am');
+    if (inp.value.length === 2 || (inp.value.length === 1 && h > 1)) { const mn = box.querySelector('.tmn'); mn.focus(); mn.select(); }
+  }
+});
+document.addEventListener('click', ev => {
+  const b = ev.target.closest && ev.target.closest('.timein .ap button'); if (!b) return;
+  const box = timeBox(b); pickAp(box, b.dataset.ap); box.dataset.apSet = 1;
+  if (!box.querySelector('.th').value) { box.querySelector('.th').focus(); }
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+});
+document.addEventListener('focusin', ev => { if (timeBox(ev.target) && ev.target.tagName === 'INPUT') setTimeout(() => { try { ev.target.select(); } catch (e) {} }, 0); });
+// Tidy when leaving: "5" minutes → "05", hour typed without minutes → ":00", and mark red if it isn't a time
 document.addEventListener('focusout', ev => {
-  const el = ev.target; if (!el.classList || !el.classList.contains('timein')) return;
-  const v = parseTimeText(el.value); el.classList.toggle('bad', v === null); if (v) el.value = fmtTime(v);
+  const box = timeBox(ev.target); if (!box) return;
+  setTimeout(() => { if (box.contains(document.activeElement)) return;
+    const v = readTime(box); box.classList.toggle('bad', v === null); if (v) setTime(box, v); }, 0);
 }, true);
 function fmtRange(s, e) {
   if (!s) return ''; if (!e) return fmtTime(s);
@@ -1153,7 +1197,7 @@ function openEditor(date, id) {
     <div id="fNewPlace" style="display:none;margin-top:8px" class="place-row"><input type="color" id="fNewColor" value="#e0533d"><input type="text" id="fNewName" placeholder="New place name"></div>
     <div class="row">
       <div><label>Start</label>${timeIn('fStart', e.start)}</div>
-      <div><label>End</label>${timeIn('fEnd', e.end, '', 'e.g. 2pm')}</div>
+      <div><label>End</label>${timeIn('fEnd', e.end)}</div>
     </div>
     <label>Tasks <span style="text-transform:none;letter-spacing:0">· time is optional</span></label><div id="fTasks"></div>
     <button class="add-small" id="fAddTask">+ Add task</button>
@@ -1184,8 +1228,8 @@ function openEditor(date, id) {
   const tasksEl = document.getElementById('fTasks');
   const addTask = (v = '', tm = '') => {
     const row = document.createElement('div'); row.className = 'task-row';
-    row.innerHTML = `<input type="text" class="tx" placeholder="e.g. Lecture notes">${timeIn('', '', 'tt', 'Time')}<button aria-label="Remove">−</button>`;
-    row.querySelector('.tx').value = v; row.querySelector('.tt').value = fmtTime(tm); row.querySelector('button').onclick = () => row.remove();
+    row.innerHTML = `<input type="text" class="tx" placeholder="e.g. Lecture notes">${timeIn('', tm, 'tt')}<button class="rm" aria-label="Remove">−</button>`;
+    row.querySelector('.tx').value = v; row.querySelector('.rm').onclick = () => row.remove();
     tasksEl.appendChild(row); return row;
   };
   (e.tasks.length ? e.tasks : ['']).forEach((t, i) => addTask(t, taskT(e, i)));
@@ -1230,8 +1274,8 @@ function openEditor(date, id) {
   const resetClash = () => { clashOk = false; document.getElementById('fWarn').style.display = 'none'; document.getElementById('fSave').textContent = 'Save'; };
   ['fStart', 'fEnd'].forEach(id => document.getElementById(id).addEventListener('input', resetClash));
   document.getElementById('fSave').onclick = () => {
-    const badT = [...document.querySelectorAll('#sheet .timein')].find(el => parseTimeText(el.value) === null);
-    if (badT) { badT.classList.add('bad'); badT.focus(); return toast('Type the time like 9am, 9:30 or 14:00'); }
+    const badT = [...document.querySelectorAll('#sheet .timein')].find(el => readTime(el) === null);
+    if (badT) { badT.classList.add('bad'); badT.querySelector('.th').focus(); return toast('Check the time: hour 1–12 and minutes 00–59'); }
     if (sel.value === '__new') {
       const name = document.getElementById('fNewName').value.trim();
       if (!name) return toast('Type a name for the new place');
