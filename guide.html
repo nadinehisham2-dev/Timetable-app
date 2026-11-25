@@ -168,7 +168,7 @@
       <li><b>🔔 Set reminder</b>: choose a reminder time.</li>
       <li><b>↻ Repeat</b>: set or change how it repeats.</li>
       <li><b>⧉ Copy to…</b> and <b>➜ Move to…</b>: put it on another day.</li>
-      <li><b>🗑 Delete</b>: remove it (with a confirmation).</li>
+      <li><b>🗑 Delete</b>: remove it. For repeating plans you choose exactly which days (see Repeating plans), and you always see an <b>Are you sure?</b> window first.</li>
     </ul></li>
   <li><b>Undo:</b> almost every change shows a message with <b>Undo</b> for 8 seconds, and ↶ at the top undoes changes at any time while the app is open.</li>
 </ul>
@@ -189,20 +189,27 @@
   <li><b>Every month on certain weeks</b>: pick 1st, 2nd, 3rd, 4th, 5th or Last, and the day (e.g. 1st &amp; 3rd Sunday).</li>
   <li><b>Until</b>: an optional end date.</li>
 </ul>
-<h3>Changing or deleting a repeating plan</h3>
-<p>The app asks which days the change is for:</p>
+<h3>Changing a repeating plan</h3>
+<p>When you save a change to a repeating plan (in the editor, or its notes or reminder from the long-press menu), the app asks which days it's for: <b>This day only</b> (the highlighted choice), <b>This day and the days after it</b>, <b>Choose dates…</b> (between a From and To date), or <b>All days, past included</b>. Nothing changes on other days unless you choose it.</p>
+<h3>Deleting a repeating plan</h3>
+<p>Tap <b>Delete</b> and choose which days to remove it from:</p>
 <ul>
-  <li><b>This day only</b></li>
-  <li><b>This day and the days after it</b> (past days stay as they were)</li>
-  <li><b>Choose dates…</b> (only between a From and To date; leave To empty for "onwards")</li>
-  <li><b>All days, past included</b></li>
+  <li><b>Only this day</b></li>
+  <li><b>This day and every day after it</b> (earlier days stay)</li>
+  <li><b>Choose specific dates…</b>: a small calendar opens; days with a dot are when the plan happens. Tap the ones to remove.</li>
+  <li><b>A certain weekday…</b>: pick the day(s) of the week (e.g. Wednesday) and which weeks: <b>every week</b>, <b>every other week starting this week</b> (remove, keep, remove…), <b>every other week starting next week</b> (keep, remove, keep…), or <b>certain weeks of the month</b> (1st, 2nd, 3rd, 4th, 5th, Last). You can set a start and an optional end date. If the plan has no end date, "every other week" and "certain weeks" cover the next 2 years.</li>
+  <li><b>Between two dates…</b></li>
+  <li><b>Delete it from every day (past included)</b></li>
 </ul>
-<p>To add a repeating plan to a day it normally isn't on, open that day and tap it under <b>Add a repeating item to this day only</b>.</p>
+<p><b>Shortcut:</b> in the editor, untick the repeat days you want to keep and leave ticked only the ones to remove (e.g. a plan on Sat, Mon and Wed: untick Sat and Mon, leave Wed), then tap <b>Delete</b>. The app then offers: <b>only this Wednesday</b>, <b>this and every following Wednesday</b>, or <b>every Wednesday (past ones too)</b>. Saturdays and Mondays are not touched.</p>
+<p><b>Before anything is deleted</b>, an <b>Are you sure?</b> window explains exactly what will happen and lists the days affected, with <b>Delete</b> and <b>Cancel</b>. Undo is still available afterwards.</p>
+<h3>Quick add a usual place &amp; time</h3>
+<p>At the bottom of each day, <b>Quick add a usual place &amp; time</b> lists each place and time from your repeating plans once (e.g. <i>PUA 8am–1:46pm</i>). Tapping one adds just that place and time to this day, as a one-off plan without tasks and without repeating. Add tasks afterwards if you want.</p>
 
 <h2 id="copy">10. Copy, move and overlaps</h2>
 <ol>
   <li>Edit the plan (or long press) and choose <b>Copy to…</b> or <b>Move to…</b>.</li>
-  <li>Pick the date. The app shows what will happen and warns if it overlaps something.</li>
+  <li>Tap the day in the small calendar (use ‹ › to change month). For <b>Copy</b> you can tap several days to copy to all of them at once. The app shows what will happen and warns if it overlaps something.</li>
   <li>Tap <b>Yes, copy/move to …</b>. An <b>Undo</b> button appears afterwards.</li>
 </ol>
 <p>For a repeating plan, only the chosen day is copied or moved; the rest of the series stays.</p>
@@ -254,6 +261,7 @@
   <li><b>⚙️ Settings:</b> places and colours, <b>text size</b> (Small, Medium, Large, Extra large), <b>Calendar</b>: which day the week starts on and the hours the Week view shows (these are saved per device), templates, account and backup.</li>
   <li><b>Download backup / Restore backup:</b> saves all your plans to a file you keep, or restores from one. Useful for keeping a monthly copy or moving to another account.</li>
   <li><b>Undo/redo:</b> ↶ ↷ at the top. The history lasts while the app stays open.</li>
+  <li><b>App version:</b> shown at the bottom of Settings, to check you have the latest update.</li>
   <li><b>Tour:</b> the first time the app opens, a short tour explains the screen. Replay it from <b>? → Show the tour again</b>.</li>
 </ul>
 

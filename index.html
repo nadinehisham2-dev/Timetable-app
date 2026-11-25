@@ -223,6 +223,17 @@
   .task-row .tt { flex:none; padding-left:4px; }
   .task-row .tt input { width:1.9em; font-size:16px; }
   .task-row .tt .ap button { padding:6px 5px; font-size:11px; }
+  .minical { border:1px solid var(--line); border-radius:12px; padding:8px; }
+  .mc-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .mc-head b { font-size:16px; }
+  .mc-head button { border:none; background:var(--soft); color:var(--accent); font-size:22px; width:40px; height:36px; border-radius:10px; cursor:pointer; }
+  .mc-grid { display:grid; grid-template-columns:repeat(7, 1fr); gap:3px; text-align:center; }
+  .mc-dn { font-size:11px; color:var(--muted); padding:2px 0; }
+  .mc-grid button { position:relative; border:none; background:none; color:var(--text); font:inherit; font-size:16px; height:40px; border-radius:20px; cursor:pointer; }
+  .mc-grid button.td { color:var(--accent); font-weight:700; }
+  .mc-grid button.on { background:var(--accent); color:#fff; font-weight:700; }
+  .mc-grid button.dot::after { content:''; position:absolute; left:50%; bottom:4px; width:5px; height:5px; margin-left:-2.5px; border-radius:50%; background:currentColor; opacity:.55; }
+  .mc-grid button:disabled { color:var(--muted); opacity:.35; cursor:default; }
   .timein.bad { border-color:#d93025 !important; box-shadow:0 0 0 2px rgba(217,48,37,.2); }
   .ttm { font-size:.9em; }
   .ttm2 { font-weight:600; color:var(--muted); }
@@ -447,6 +458,7 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 /* ================= Helpers ================= */
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 // Week columns follow the "Week starts on" setting (default Saturday). Fri & Sat are shaded as the weekend.
+const APP_VERSION = '2026.11.25-d';
 const DOW_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], WEEKEND_DOW = [5, 6];
 let DAYS, COL2DOW, WEEKEND;
 const WS = () => (ui.weekStart ?? 6);
@@ -1148,9 +1160,12 @@ function openDay(date) {
   if (date === todayIso()) { const n = unfinished().length; if (n) html += `<button class="secondary" id="openTodo" style="margin:0 0 10px">↺ ${n} unfinished task${n > 1 ? 's' : ''} from earlier days</button>`; }
   html += `<button class="primary" id="addEntry">+ Add</button>
     <div class="two"><button class="secondary" id="tplApply">📋 Use a template</button><button class="secondary" id="tplSave" ${list.length ? '' : 'disabled style="opacity:.4"'}>Save day as template</button></div>`;
-  const missing = db.entries.filter(e => e.repeat && !occurs(e, date));
-  if (missing.length) html += `<div class="lbl">Add a repeating item to this day only</div><div class="quick">` +
-    missing.map(e => `<button data-q="${e.id}" style="color:${txt(place(e.placeId).color)}">+ ${esc(place(e.placeId).name)} ${fmtRange(e.start, e.end)}</button>`).join('') + '</div>';
+  // Quick add: each place + time from your repeating items, listed once (only the place and time are used)
+  const seen = new Set(list.map(e => `${e.placeId}|${e.start}|${e.end}`)), usual = [];
+  db.entries.filter(e => e.repeat && db.places.some(p => p.id === e.placeId)).forEach(e => { const k = `${e.placeId}|${e.start}|${e.end}`; if (!seen.has(k)) { seen.add(k); usual.push(e); } });
+  usual.sort((a, b) => (a.start || '').localeCompare(b.start || '') || place(a.placeId).name.localeCompare(place(b.placeId).name));
+  if (usual.length) html += `<div class="lbl">Quick add a usual place & time</div><div class="quick">` +
+    usual.map(e => `<button data-q="${e.id}" style="color:${txt(place(e.placeId).color)}">+ ${esc(place(e.placeId).name)} ${fmtRange(e.start, e.end)}</button>`).join('') + '</div>';
   showSheet(longDate(date), html, null, 'day');
 
   // Tap anywhere on a place card to edit it; only the checkbox itself ticks a task
@@ -1167,8 +1182,8 @@ function openDay(date) {
   body.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
     const e = db.entries.find(x => x.id === b.dataset.q);
     withUndo(`Added ${place(e.placeId).name} to ${shortDate(date)}`, () => {
-      e.skip = e.skip.filter(d => d !== date);
-      if (!occurs(e, date)) e.extra.push(date);
+      db.entries.push({ id:uid(), date, placeId:e.placeId, start:e.start, end:e.end, tasks:[], taskTimes:[], note:'',
+        remind:place(e.placeId).remind ?? null, repeat:null, skip:[], extra:[], done:{} });
     }, () => openDay(date));
   });
   document.getElementById('addEntry').onclick = () => openEditor(date);
@@ -1311,7 +1326,14 @@ function openEditor(date, id) {
   };
 
   if (!orig) return;
-  document.getElementById('fDelete').onclick = () => confirmDelete(date, orig, () => openEditor(date, id));
+  document.getElementById('fDelete').onclick = () => {
+    const r0 = orig.repeat;
+    if (r0 && ['weekly', 'monthNth'].includes(r0.freq) && freq.value === r0.freq) {
+      const days = [...document.querySelectorAll('#fDays .on')].map(b => +b.dataset.dow);
+      if (days.length && days.length < r0.days.length && days.every(d => r0.days.includes(d))) return deleteWeekdays(date, orig, days, () => openEditor(date, id));
+    }
+    confirmDelete(date, orig, () => openEditor(date, id));
+  };
   document.getElementById('fCopy').onclick = () => openTransfer(date, orig, 'copy');
   document.getElementById('fMove').onclick = () => openTransfer(date, orig, 'move');
 }
@@ -1339,6 +1361,7 @@ function splitSeries(orig, from, to, data) {
 function seriesScope(kind, orig, date, data, backTo) {
   const del = kind === 'delete', name = esc(place(orig.placeId).name);
   const back = backTo || (() => openEditor(date, orig.id)), done = () => openDay(date);
+  if (del) return deleteFlow(date, orig, back);
   const dayOnly = () => withUndo(del ? 'Removed from this day' : 'Changed for this day', () => {
     orig.extra = orig.extra.filter(d => d !== date);
     if (occurs(orig, date)) orig.skip.push(date);
@@ -1361,14 +1384,140 @@ function seriesScope(kind, orig, date, data, backTo) {
     };
   };
   ask(del ? 'Delete' : 'Save changes', del ? `Remove <b>${name}</b> from:` : 'This is a repeating item. Apply your changes to:', [
-    { label:`This day only (${shortDate(date)})`, cls:'secondary', fn:dayOnly },
-    { label:`This day and the days after it`, cls:'primary', fn:() => range(date, null) },
+    { label:`This day only (${shortDate(date)})`, cls:'primary', fn:dayOnly },
+    { label:`This day and the days after it`, cls:'secondary', fn:() => range(date, null) },
     { label:'Choose dates…', fn:pickDates },
     { label: del ? 'Every day, past included (delete all)' : 'All days, past included', cls: del ? 'danger' : 'secondary',
       fn:() => del ? withUndo('Series deleted', () => { db.entries = db.entries.filter(x => x !== orig); }, done)
                    : withUndo('Series updated', () => Object.assign(orig, data, { date: data.repeat ? orig.date : date }), done) },
   ], back);
   body.insertAdjacentHTML('beforeend', `<div class="meta" style="margin-top:10px">Days before the ones you pick stay exactly as they were.</div>`);
+}
+
+/* ===== Deleting a repeating item: choose exactly which days, see what will happen, then confirm ===== */
+function deleteFlow(date, orig, back) {
+  const r = orig.repeat, done = () => openDay(date), me = () => deleteFlow(date, orig, back);
+  const run = (msg, fn) => withUndo(msg, fn, done);
+  const fromHere = occDates(orig, date);
+  ask('Delete', `${itemLabel(orig)} repeats <b>${esc(repeatText(r))}</b>${r.until ? ' until ' + shortDate(r.until) : ''}.<div style="margin-top:6px">Which days do you want to remove it from?</div>`, [
+    { label:`Only this day (${shortDate(date)})`, cls:'primary', fn:() => confirmRemove(orig,
+        `It will be removed from <b>${longDate(date)}</b> only. Every other day stays as it is.`,
+        () => run(`Removed from ${shortDate(date)}`, () => removeDays(orig, [date])), me) },
+    { label:'This day and every day after it', fn:() => confirmRemove(orig,
+        `It will be removed from <b>${longDate(date)} onwards</b>${r.until ? ` (${plural(fromHere.length, 'day')}: ${dateList(fromHere, 6)})` : ' (no end date, so all future days)'}. Days before ${shortDate(date)} stay as they are.`,
+        () => run(`Removed from ${shortDate(date)} on`, () => splitSeries(orig, date, null, null)), me) },
+    { label:'Choose specific dates…', fn:() => pickDays(date, orig, me) },
+    { label:'A certain weekday (every week, every other week…)', fn:() => pickWeekday(date, orig, me) },
+    { label:'Between two dates…', fn:() => pickRange(date, orig, me) },
+    { label:'Delete it from every day (past included)', cls:'danger', fn:() => confirmRemove(orig,
+        `The whole repeating item will be deleted: <b>every day it appears on, past and future</b>, including its notes and ticked tasks.`,
+        () => run('Repeating item deleted', () => { db.entries = db.entries.filter(x => x !== orig); }), me, 'Delete everything') },
+  ], back);
+}
+function pickDays(date, orig, back) {
+  const r = orig.repeat;
+  showSheet('Choose dates', `${itemLabel(orig)}<div class="meta" style="margin:6px 0 4px">Tap the days to remove it from. Days with a dot are when it happens.</div>
+    <div class="minical" id="pdCal"></div><div class="meta" id="pdSel" style="margin-top:8px">No days chosen yet.</div>
+    <div style="height:12px"></div><button class="primary" id="pdGo" disabled>Next</button>`, back, 'other');
+  let picked = [];
+  miniCal(document.getElementById('pdCal'), { multi:true, start:date, value: occurs(orig, date) ? [date] : [], dot: d => occurs(orig, d), disabled: d => !occurs(orig, d),
+    onChange: l => { picked = l; document.getElementById('pdSel').innerHTML = l.length ? `Chosen: <b>${dateList(l, 20)}</b>` : 'No days chosen yet.'; const g = document.getElementById('pdGo'); g.disabled = !l.length; g.textContent = l.length ? `Next (${plural(l.length, 'day')})` : 'Next'; } });
+  if (occurs(orig, date)) { picked = [date]; document.getElementById('pdSel').innerHTML = `Chosen: <b>${shortDate(date)}</b>`; const g = document.getElementById('pdGo'); g.disabled = false; g.textContent = 'Next (1 day)'; }
+  document.getElementById('pdGo').onclick = () => confirmRemove(orig,
+    `It will be removed from <b>${plural(picked.length, 'day')}</b>: ${dateList(picked, 30)}. All other days stay as they are.`,
+    () => withUndo(`Removed from ${plural(picked.length, 'day')}`, () => removeDays(orig, picked), () => openDay(date)), () => pickDays(date, orig, back));
+}
+function pickWeekday(date, orig, back, preset) {
+  const r = orig.repeat, d0 = parse(date).getDay();
+  const used = r.freq === 'daily' || r.freq === 'monthly' ? COL2DOW : COL2DOW.filter(d => (r.days || []).includes(d));
+  const chosen = preset || [used.includes(d0) ? d0 : used[0]];
+  showSheet('Remove a weekday', `${itemLabel(orig)}
+    <label>Which day(s) of the week</label>
+    <div class="days" id="pwDays">${used.map(d => `<button data-dow="${d}" class="${chosen.includes(d) ? 'on' : ''}">${DOW_NAMES[d]}</button>`).join('')}</div>
+    <label>Which weeks</label>
+    <select id="pwWeeks">
+      <option value="all">Every week</option>
+      <option value="alt0">Every other week, starting this week (remove, keep, remove…)</option>
+      <option value="alt1">Every other week, starting next week (keep, remove, keep…)</option>
+      <option value="nth">Certain weeks of the month…</option>
+    </select>
+    <div id="pwNthWrap" style="display:none"><div class="days" id="pwNth" style="margin-top:8px">${NTH.map(([k, l]) => `<button data-n="${k}" class="${k === Math.ceil(parse(date).getDate() / 7) ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+    <div class="row"><div><label>Starting</label><input type="date" id="pwFrom" value="${date}"></div><div><label>Until (optional)</label><input type="date" id="pwTo" value=""></div></div>
+    <div class="box" id="pwPrev" style="margin-top:12px"></div>
+    <div style="height:12px"></div><button class="primary" id="pwGo">Next</button>`, back, 'other');
+  const wk = document.getElementById('pwWeeks');
+  ['pwDays', 'pwNth'].forEach(id => document.getElementById(id).onclick = ev => { const b = ev.target.closest('button'); if (b) { b.classList.toggle('on'); prev(); } });
+  const read = () => {
+    const days = [...document.querySelectorAll('#pwDays .on')].map(b => +b.dataset.dow), w = wk.value;
+    const nths = [...document.querySelectorAll('#pwNth .on')].map(b => +b.dataset.n);
+    const from = document.getElementById('pwFrom').value || date, to = document.getElementById('pwTo').value || null;
+    const base = wkIdx(from);
+    const match = d => { const x = parse(d); if (!days.includes(x.getDay())) return false;
+      if (w === 'alt0' || w === 'alt1') return ((wkIdx(d) - base) % 2 + 2) % 2 === (w === 'alt0' ? 0 : 1);
+      if (w === 'nth') { const nth = Math.ceil(x.getDate() / 7), last = x.getDate() + 7 > new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate(); return nths.some(k => k === nth || (k === -1 && last)); }
+      return true; };
+    const dates = occDates(orig, from, to).filter(match);
+    // "Every week" with no end on a weekly/daily item: change the repeat itself, so it's removed forever
+    const asRule = w === 'all' && !to && ['weekly', 'daily', 'monthNth'].includes(r.freq);
+    return { days, w, nths, from, to, dates, asRule };
+  };
+  const names = days => days.map(d => DOW_LONG[d] + 's').join(' & ');
+  const describe = o => {
+    const which = o.w === 'all' ? `every ${o.days.map(d => DOW_LONG[d]).join(' & ')}` : o.w === 'nth' ? `${names(o.days)} in the ${o.nths.map(k => NTH.find(n => n[0] === k)[1]).join(' & ')} week of each month`
+      : `${names(o.days)} every other week (${o.w === 'alt0' ? 'starting the week of ' : 'starting the week after '}${shortDate(o.from)})`;
+    return `It will be removed on <b>${which}</b> from ${shortDate(o.from)}${o.to ? ' until ' + shortDate(o.to) : o.asRule ? ' onwards, with no end' : r.until ? ' until it ends (' + shortDate(r.until) + ')' : ' for the next 2 years'}.` +
+      `<div class="meta" style="margin-top:6px">${o.dates.length ? `${o.asRule ? 'Next days removed' : plural(o.dates.length, 'day') + ' removed'}: ${dateList(o.dates, 8)}` : 'It doesn’t happen on any of those days.'}</div>` +
+      `<div class="meta">Other days stay as they are.</div>`;
+  };
+  const prev = () => { document.getElementById('pwNthWrap').style.display = wk.value === 'nth' ? '' : 'none'; const o = read(); document.getElementById('pwPrev').innerHTML = o.days.length ? describe(o) : 'Pick at least one day of the week.'; };
+  wk.onchange = prev; ['pwFrom', 'pwTo'].forEach(id => ['input', 'change', 'blur'].forEach(t => document.getElementById(id).addEventListener(t, prev)));
+  prev();
+  document.getElementById('pwGo').onclick = () => {
+    const o = read();
+    if (!o.days.length) return toast('Pick at least one day of the week');
+    if (o.w === 'nth' && !o.nths.length) return toast('Pick which weeks of the month');
+    if (!o.dates.length) return toast('It doesn’t happen on those days');
+    confirmRemove(orig, describe(o), () => withUndo(`Removed from ${o.days.map(d => DOW_NAMES[d]).join(' & ')}`, () => {
+      if (o.asRule) {
+        const left = (r.freq === 'daily' ? [0, 1, 2, 3, 4, 5, 6] : r.days).filter(d => !o.days.includes(d));
+        const rep = r.freq === 'daily' ? { ...r, freq:'weekly', every:1, days:left } : { ...r, days:left };
+        splitSeries(orig, o.from, null, left.length ? { ...clone(orig), repeat:rep } : null);
+      } else removeDays(orig, o.dates);
+    }, () => openDay(date)), () => pickWeekday(date, orig, back, o.days));
+  };
+}
+function pickRange(date, orig, back) {
+  showSheet('Between two dates', `${itemLabel(orig)}<div class="meta" style="margin-top:6px">Remove it on every day it happens between these dates. Days outside stay as they are.</div>
+    <div class="row"><div><label>From</label><input type="date" id="rgFrom" value="${date}"></div>
+    <div><label>To</label><input type="date" id="rgTo"></div></div>
+    <div class="meta">Leave "To" empty for "from this date onwards".</div>
+    <div style="height:14px"></div><button class="primary" id="rgGo">Next</button>`, back, 'other');
+  document.getElementById('rgGo').onclick = () => {
+    const f = document.getElementById('rgFrom').value, t = document.getElementById('rgTo').value;
+    if (!f) return toast('Choose a start date');
+    if (t && t < f) return toast('"To" must be after "From"');
+    const ds = occDates(orig, f, t || null);
+    confirmRemove(orig, `It will be removed ${t ? `from <b>${shortDate(f)} to ${shortDate(t)}</b>` : `from <b>${shortDate(f)} onwards</b>`}${t || orig.repeat.until ? ` (${plural(ds.length, 'day')}: ${dateList(ds, 8)})` : ' (no end date, so all future days)'}. Days outside stay as they are.`,
+      () => withUndo('Removed', () => splitSeries(orig, f, t || null, null), () => openDay(date)), () => pickRange(date, orig, back));
+  };
+}
+// Delete pressed in the editor after unticking some repeat days: remove only the days still ticked
+function deleteWeekdays(date, orig, days, back) {
+  const r = orig.repeat, here = days.includes(parse(date).getDay()), nm = days.map(d => DOW_LONG[d]).join(' & ');
+  const left = r.days.filter(d => !days.includes(d)), me = () => deleteWeekdays(date, orig, days, back);
+  const fut = occDates(orig, date).filter(d => days.includes(parse(d).getDay()));
+  const opts = [];
+  if (here) opts.push({ label:`Only this ${dowName(date)} (${shortDate(date)})`, cls:'primary', fn:() => confirmRemove(orig,
+    `It will be removed from <b>${longDate(date)}</b> only. Every other day stays as it is.`,
+    () => withUndo(`Removed from ${shortDate(date)}`, () => removeDays(orig, [date]), () => openDay(date)), me) });
+  opts.push({ label:`${here ? 'This and every following' : 'Every coming'} ${nm}`, cls: here ? 'secondary' : 'primary', fn:() => confirmRemove(orig,
+    `It will be removed on <b>every ${nm} from ${shortDate(date)} onwards</b>${r.until ? ` (${plural(fut.length, 'day')})` : ''}. Next: ${dateList(fut, 6)}.<div class="meta" style="margin-top:6px">${left.length ? `It stays on ${left.map(d => DOW_LONG[d]).join(', ')}, and earlier ${nm}s stay too.` : 'No other days are left after this, so it ends here.'}</div>`,
+    () => withUndo(`Removed ${nm}s`, () => splitSeries(orig, date, null, left.length ? { ...clone(orig), repeat:{ ...r, days:left } } : null), () => openDay(date)), me) });
+  opts.push({ label:`Every ${nm} (past ones too)`, fn:() => confirmRemove(orig,
+    `It will be removed on <b>every ${nm}</b> in this repeating item, past and future.<div class="meta" style="margin-top:6px">${left.length ? `It stays on ${left.map(d => DOW_LONG[d]).join(', ')}.` : 'No other days are left, so the whole item is deleted.'}</div>`,
+    () => withUndo(`Removed ${nm}s`, () => { if (left.length) orig.repeat = { ...r, days:left }; else db.entries = db.entries.filter(x => x !== orig); }, () => openDay(date)), me) });
+  opts.push({ label:'Something else…', fn:() => deleteFlow(date, orig, me) });
+  ask('Delete', `${itemLabel(orig)}<div style="margin-top:6px">You left only <b>${nm}</b> ticked, so only ${nm} will be removed. Which ones?</div>`, opts, back);
 }
 
 function findClashes(date, item, except) {
@@ -1420,23 +1569,26 @@ function itemMenu(date, id) {
     if (k === 'delete') return confirmDelete(date, e, back);
   });
 }
+const dataOf = e => ({ placeId:e.placeId, start:e.start, end:e.end, tasks:[...e.tasks], taskTimes:[...(e.taskTimes || [])], note:e.note, remind:e.remind, repeat:e.repeat ? clone(e.repeat) : null });
 function itemNotes(date, e, back) {
-  showSheet('Notes', `<div class="meta">${esc(place(e.placeId).name)} · ${shortDate(date)}${e.repeat ? ' · notes are shared by every day of this repeating item' : ''}</div>
+  showSheet('Notes', `<div class="meta">${esc(place(e.placeId).name)} · ${shortDate(date)}${e.repeat ? ' · this repeats: you’ll choose which days the notes apply to' : ''}</div>
     <textarea id="nText" style="min-height:160px;margin-top:10px" placeholder="No notes yet. Type here to add some.">${esc(e.note)}</textarea>
     <div style="height:12px"></div><button class="primary" id="nSave">Save notes</button>`, back, 'other');
   document.getElementById('nSave').onclick = () => {
     const v = document.getElementById('nText').value.trim();
     if (v === (e.note || '')) return back();
+    if (e.repeat) return seriesScope('edit', e, date, { ...dataOf(e), note:v }, back);
     withUndo('Notes saved', () => { e.note = v; }, back);
   };
 }
 function itemReminder(date, e, back) {
-  showSheet('Set reminder', `<div class="meta">${esc(place(e.placeId).name)}${e.start ? ' starts at ' + fmtTime(e.start) : ' has no start time, so reminders use 8am'}${e.repeat ? '. This applies to every day it repeats.' : '.'}</div>
+  showSheet('Set reminder', `<div class="meta">${esc(place(e.placeId).name)}${e.start ? ' starts at ' + fmtTime(e.start) : ' has no start time, so reminders use 8am'}${e.repeat ? '. This repeats: you\'ll choose which days it applies to.' : '.'}</div>
     <label>Remind me</label>${remindPicker('irWhen', e.remind)}
     <div style="height:14px"></div><button class="primary" id="irSave">Save reminder</button>`, back, 'other');
   wirePicker('irWhen');
   document.getElementById('irSave').onclick = () => {
     const v = readPicker('irWhen'); if (v === undefined) return toast('Type how long before you want the reminder');
+    if (e.repeat) return seriesScope('edit', e, date, { ...dataOf(e), remind:v }, back);
     withUndo(`Reminder: ${remindLabel(v)}`, () => { e.remind = v; }, back);
   };
 }
@@ -1481,6 +1633,49 @@ function itemRepeat(date, e, back) {
   };
 }
 
+/* ===== Small tap-to-pick month calendar (used instead of the date box, which is unreliable on iPhone) ===== */
+function miniCal(host, o) {   // o: { value:[iso], multi, start, onChange(list), dot(iso), disabled(iso) }
+  let sel = new Set(o.value || []); const m = parse(o.start || (o.value && o.value[0]) || todayIso()); m.setDate(1);
+  const draw = () => {
+    const y = m.getFullYear(), mo = m.getMonth(), off = colOf(new Date(y, mo, 1).getDay()), n = new Date(y, mo + 1, 0).getDate(), t = todayIso();
+    let h = `<div class="mc-head"><button type="button" data-nav="-1" aria-label="Previous month">‹</button><b>${MONTHS[mo]} ${y}</b><button type="button" data-nav="1" aria-label="Next month">›</button></div><div class="mc-grid">${DAYS.map(d => `<span class="mc-dn">${d.slice(0, 2)}</span>`).join('')}`;
+    for (let i = 0; i < off; i++) h += '<span></span>';
+    for (let d = 1; d <= n; d++) { const v = iso(y, mo, d);
+      h += `<button type="button" data-d="${v}" class="${sel.has(v) ? 'on' : ''}${v === t ? ' td' : ''}${o.dot && o.dot(v) ? ' dot' : ''}" ${o.disabled && o.disabled(v) ? 'disabled' : ''}>${d}</button>`; }
+    host.innerHTML = h + '</div>';
+  };
+  host.onclick = ev => {
+    const b = ev.target.closest('button'); if (!b || b.disabled) return; ev.preventDefault();
+    if (b.dataset.nav) { m.setMonth(m.getMonth() + +b.dataset.nav); return draw(); }
+    const d = b.dataset.d;
+    if (o.multi) { sel.has(d) ? sel.delete(d) : sel.add(d); } else sel = new Set(sel.has(d) ? [] : [d]);
+    draw(); if (o.onChange) o.onChange([...sel].sort());
+  };
+  draw();
+  return { get: () => [...sel].sort() };
+}
+const dowName = iso => ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][parse(iso).getDay()];
+const DOW_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+// Week number that follows the "Week starts on" setting
+const wkIdx = d => { const [y, m, dd] = d.split('-').map(Number), n = Date.UTC(y, m - 1, dd) / 864e5; return Math.floor((n - colOf(new Date(n * 864e5).getUTCDay())) / 7); };
+// The days a repeating item happens on between two dates (no end → up to 2 years ahead)
+function occDates(e, from, to) {
+  const last = to || (e.repeat && e.repeat.until) || addDays(from, 730), out = [];
+  for (let d = from; d <= last && out.length < 800; d = addDays(d, 1)) if (occurs(e, d)) out.push(d);
+  return out;
+}
+const dateList = (ds, max = 10) => ds.length ? ds.slice(0, max).map(shortDate).join(', ') + (ds.length > max ? ` and ${ds.length - max} more` : '') : 'no days';
+function removeDays(e, dates) { dates.forEach(d => { e.extra = e.extra.filter(x => x !== d); if (occurs(e, d) && !e.skip.includes(d)) e.skip.push(d); }); }
+const itemLabel = e => `<b style="color:${txt(place(e.placeId).color)}">${esc(place(e.placeId).name)}</b>${e.start ? ' <span class="tm">' + fmtRange(e.start, e.end) + '</span>' : ''}`;
+// Every deletion first shows what will happen, then asks
+function confirmRemove(e, explain, doIt, back, label = 'Delete') {
+  ask('Are you sure?', `${itemLabel(e)}<div style="margin-top:8px">${explain}</div>`, [
+    { label, cls:'danger', fn:doIt },
+    { label:'Cancel', fn:back },
+  ], back);
+}
+
 /* ===== Copy / move: pick a day, confirm, then Undo is available ===== */
 function openTransfer(from, e, kind, backTo) {
   const goBack = backTo || (() => openEditor(from, e.id));
@@ -1489,37 +1684,38 @@ function openTransfer(from, e, kind, backTo) {
     (e.tasks.length ? `<br>${e.tasks.map(esc).join(', ')}` : '');
   showSheet(`${verb} to another day`, `
     <div class="box">${summary}<div class="meta">From ${longDate(from)}</div></div>
-    <label>${verb} to</label><input type="date" id="tDate">
+    <label>${verb} to <span style="text-transform:none;letter-spacing:0">· ${kind === 'copy' ? 'tap one or more days' : 'tap a day'}</span></label>
+    <div class="minical" id="tCal"></div>
     <div class="box" id="tCheck" style="display:none"></div>
     ${e.repeat ? `<div class="meta" style="margin-top:8px">This is a repeating item: only ${shortDate(from)} is ${kind === 'copy' ? 'copied' : 'moved'}. The rest of the series stays as it is.</div>` : ''}
     <div style="height:14px"></div>
     <button class="primary" id="tGo" disabled>Choose a day first</button>
     <button class="secondary" id="tCancel">Cancel</button>`, goBack, 'other');
-  const inp = document.getElementById('tDate'), go = document.getElementById('tGo'), chk = document.getElementById('tCheck');
+  const go = document.getElementById('tGo'), chk = document.getElementById('tCheck');
   const endMin = x => toMin(x.end) ?? toMin(x.start) + 60;
-  inp.oninput = () => {
-    const to = inp.value;
-    if (!to || to === from) { go.disabled = true; go.textContent = to === from ? 'Pick a different day' : 'Choose a day first'; chk.style.display = 'none'; return; }
-    const clash = e.start ? entriesFor(to, true).filter(x => x !== e && x.start && toMin(x.start) < endMin(e) && toMin(e.start) < endMin(x)) : [];
-    chk.style.display = ''; chk.innerHTML = `${verb} to <b>${longDate(to)}</b>?` +
-      (clash.length ? `<div class="warn" style="margin-top:6px">⚠️ Overlaps with ${clash.map(x => esc(place(x.placeId).name) + ' ' + fmtRange(x.start, x.end)).join(', ')}</div>` : '');
-    go.disabled = false; go.textContent = `Yes, ${verb.toLowerCase()} to ${shortDate(to)}`;
-  };
-  // iPhone/iPad don't always send "input" for date boxes, so listen to every kind of change and also check regularly
-  inp.onchange = inp.onblur = inp.oninput;
-  let lastV = ''; const poll = setInterval(() => { if (!document.body.contains(inp)) return clearInterval(poll); if (inp.value !== lastV) { lastV = inp.value; inp.oninput(); } }, 300);
+  let picked = [];
+  miniCal(document.getElementById('tCal'), { multi: kind === 'copy', start: from, disabled: d => d === from, onChange: list => {
+    picked = list;
+    if (!list.length) { go.disabled = true; go.textContent = 'Choose a day first'; chk.style.display = 'none'; return; }
+    const clashes = list.map(to => [to, e.start ? entriesFor(to, true).filter(x => x !== e && x.start && toMin(x.start) < endMin(e) && toMin(e.start) < endMin(x)) : []]).filter(([, c]) => c.length);
+    chk.style.display = ''; chk.innerHTML = `${verb} to <b>${list.map(shortDate).join(', ')}</b>?` +
+      clashes.map(([to, c]) => `<div class="warn" style="margin-top:6px">⚠️ ${shortDate(to)}: overlaps with ${c.map(x => esc(place(x.placeId).name) + ' ' + fmtRange(x.start, x.end)).join(', ')}</div>`).join('');
+    go.disabled = false; go.textContent = list.length === 1 ? `Yes, ${verb.toLowerCase()} to ${shortDate(list[0])}` : `Yes, copy to ${list.length} days`;
+  } });
   document.getElementById('tCancel').onclick = goBack;
   go.onclick = () => {
-    const to = inp.value; if (!to || to === from) return;
-    withUndo(`${kind === 'copy' ? 'Copied' : 'Moved'} to ${shortDate(to)}`, () => {
-      const copy = { ...clone(e), id:uid(), date:to, repeat:null, skip:[], extra:[], done:{} };
-      db.entries.push(copy);
-      if (kind === 'move') {
-        if (e.done[from]) copy.done[to] = e.done[from];
-        if (e.repeat) { e.extra = e.extra.filter(d => d !== from); if (occurs(e, from)) e.skip.push(from); }
-        else db.entries = db.entries.filter(x => x !== e);
-      }
-    }, () => openDay(kind === 'move' ? to : from));
+    if (!picked.length) return;
+    withUndo(`${kind === 'copy' ? 'Copied' : 'Moved'} to ${picked.length === 1 ? shortDate(picked[0]) : picked.length + ' days'}`, () => {
+      picked.forEach(to => {
+        const copy = { ...clone(e), id:uid(), date:to, repeat:null, skip:[], extra:[], done:{} };
+        db.entries.push(copy);
+        if (kind === 'move') {
+          if (e.done[from]) copy.done[to] = e.done[from];
+          if (e.repeat) { e.extra = e.extra.filter(d => d !== from); if (occurs(e, from)) e.skip.push(from); }
+          else db.entries = db.entries.filter(x => x !== e);
+        }
+      });
+    }, () => openDay(kind === 'move' ? picked[0] : from));
   };
 }
 
@@ -1888,7 +2084,8 @@ function openSettings() {
     <div class="lbl" style="margin-top:24px">Backup</div>
     <div class="two"><button class="secondary" id="exp">Download backup</button><button class="secondary" id="imp">Restore backup</button></div>
     <input type="file" id="impFile" accept="application/json,.json" style="display:none">
-    <div class="meta" style="margin-top:14px">Prayer times are calculated for Alexandria (Egyptian General Authority of Survey method) and follow summer/winter time automatically. They may differ by a minute or two from your local mosque.</div>`, null, 'other');
+    <div class="meta" style="margin-top:14px">Prayer times are calculated for Alexandria (Egyptian General Authority of Survey method) and follow summer/winter time automatically. They may differ by a minute or two from your local mosque.</div>
+    <div class="meta" style="margin-top:10px;text-align:center">App version ${APP_VERSION}</div>`, null, 'other');
   const pl = document.getElementById('pl');
   pl.querySelectorAll('.place-row').forEach(r => r.querySelector('input[type=text]').value = place(r.dataset.id).name);
   const wire = r => r.querySelector('button').onclick = () => {
@@ -2308,7 +2505,8 @@ function tourSteps() {
     { sel:['.seg'], title:'Month or week', text:'Switch between the whole month and a week with hours. <b>Swipe left or right</b> on the calendar to go to the next or previous month or week.' },
     { sel:['#pickDay'], title:'Jump to a day', text:'Open today, tomorrow, after tomorrow or any date. <b>Today</b> at the top brings you back to the current date.' },
     { sel:['#qaBtn'], title:'Quick add', text:'Type a plan in your own words, like <i>"Clinic tomorrow 9-2 check-ups"</i> or <i>"Gym every tue 9pm"</i>, and it fills everything in for you.' },
-    { title:'Inside a day', text:'<b>Tap a place</b> to edit it. <b>Tick the small box</b> next to a task when it\'s done. <b>Press and hold</b> a place for notes, reminder, repeat, copy, move or delete.' },
+    { title:'Inside a day', text:'<b>Tap a place</b> to edit it. <b>Tick the small box</b> next to a task when it\'s done. <b>Press and hold</b> a place for notes, reminder, repeat, copy, move or delete. At the bottom, <b>Quick add</b> puts one of your usual places and times on that day.' },
+    { title:'Repeating plans', text:'Changes to a repeating plan apply to <b>this day only</b> unless you choose more. When deleting, you choose exactly which days: one day, specific dates, a weekday every week or every other week, and more. You always see what will happen before anything is deleted.' },
     { sel:['#remBtn'], title:'Reminders', text:'Set reminders for places and for each prayer, at adhan time and before the next prayer. Turn on notifications here too.' },
     { sel:['#setBtn'], title:'Settings', text:'Rename and recolour places, change the text size, choose which day the week starts on and the hours the Week view shows, manage templates and back up your calendar.' },
     { sel:['#undoBtn'], title:'Undo and redo', text:'Changed or deleted something by mistake? Tap ↶ to undo it, and ↷ to bring it back.' },
